@@ -120,27 +120,12 @@ export interface AuditLog {
   created_at: string;
 }
 
-// Minimal Database generic shape so supabase-js typing works without
-// generating the full CLI types. Extend as needed.
-export interface Database {
-  public: {
-    Tables: {
-      profiles: { Row: Profile; Insert: Partial<Profile>; Update: Partial<Profile> };
-      ministries: { Row: Ministry; Insert: Partial<Ministry>; Update: Partial<Ministry> };
-      members: { Row: Member; Insert: Partial<Member>; Update: Partial<Member> };
-      ministry_members: {
-        Row: MinistryMember;
-        Insert: Partial<MinistryMember>;
-        Update: Partial<MinistryMember>;
-      };
-      events: { Row: Event; Insert: Partial<Event>; Update: Partial<Event> };
-      attendance: { Row: Attendance; Insert: Partial<Attendance>; Update: Partial<Attendance> };
-      announcements: {
-        Row: Announcement;
-        Insert: Partial<Announcement>;
-        Update: Partial<Announcement>;
-      };
-      audit_logs: { Row: AuditLog; Insert: Partial<AuditLog>; Update: Partial<AuditLog> };
-    };
-  };
-}
+// Note: this file previously also exported a `Database` type meant to be
+// passed as a generic to createClient<Database>(). It was removed because
+// its shape didn't fully match what @supabase/supabase-js expects
+// internally, which silently broke TypeScript's checking of every insert/
+// update call across the app (all typed as `never`) without any warning
+// at the type definition itself. src/lib/supabase.ts now creates an
+// untyped client instead — every service function below already casts
+// its results to these types explicitly (e.g. `as Member[]`), which is
+// where the real type-safety comes from.

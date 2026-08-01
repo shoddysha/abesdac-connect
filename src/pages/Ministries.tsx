@@ -93,7 +93,7 @@ export function Ministries() {
 
   async function onSubmit(values: FormValues) {
     try {
-      let logo_url = editingId ? undefined : null; // keep existing logo on edit unless a new file was picked
+      let logo_url: string | null | undefined = editingId ? undefined : null; // keep existing logo on edit unless a new file was picked
       if (logoFile) {
         logo_url = await uploadMinistryLogo(logoFile, values.name);
       }
