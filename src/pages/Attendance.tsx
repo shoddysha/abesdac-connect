@@ -41,8 +41,8 @@ export function Attendance() {
   useRealtimeQuery('attendance', ['attendance', serviceDate, attendanceType, eventId]);
 
   const attendanceByMember = useMemo(() => {
-    const map = new Map<string, (typeof attendanceQuery.data)[number]>();
-    (attendanceQuery.data ?? []).forEach((row) => map.set(row.member_id, row));
+    const map = new Map<string, { id: string; check_in_time: string | null; check_out_time: string | null }>();
+    (attendanceQuery.data ?? []).forEach((row: any) => map.set(row.member_id, row));
     return map;
   }, [attendanceQuery.data]);
 
