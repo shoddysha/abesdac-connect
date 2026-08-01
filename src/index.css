@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface text-ink antialiased;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Prevent any table from forcing horizontal page scroll */
+.table-scroll {
+  @apply w-full overflow-x-auto rounded-xl border border-slate-200 bg-card;
+}
+
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
+}
