@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { validateRow, type ParsedRow } from '@/features/import/importSchema';
 import { uploadMemberImage } from '@/services/storage';
 import { createMember } from '@/services/members';
-import { fetchMinistries } from '@/services/ministries';
+import { fetchMinistries, addMemberToMinistry } from '@/services/ministries';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportToExcel } from '@/utils/export';
 
@@ -19,7 +19,7 @@ export function ImportMembersModal({ open, onClose, onImported }: { open: boolea
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [imageFiles, setImageFiles] = useState<Map<string, File>>(new Map());
   const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [result, setResult] = useState({ imported: 0, failed: 0, errors: [] as string[] });
+  const [result, setResult] = useState({ imported: 0, failed: 0, errors: [] as string[], warnings: [] as string[] });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -28,7 +28,7 @@ export function ImportMembersModal({ open, onClose, onImported }: { open: boolea
     setRows([]);
     setImageFiles(new Map());
     setProgress({ done: 0, total: 0 });
-    setResult({ imported: 0, failed: 0, errors: [] });
+    setResult({ imported: 0, failed: 0, errors: [], warnings: [] });
   }
 
   function handleClose() {
@@ -38,7 +38,7 @@ export function ImportMembersModal({ open, onClose, onImported }: { open: boolea
 
   async function handleSpreadsheet(file: File) {
     const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data);
+    const workbook = XLSX.read(data, { cellDates: true });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' });
 
@@ -80,6 +80,7 @@ export function ImportMembersModal({ open, onClose, onImported }: { open: boolea
     const ministries = await fetchMinistries();
     let imported = 0;
     const errors: string[] = [];
+    const warnings: string[] = [];
 
     for (const row of validRows) {
       try {
@@ -93,9 +94,31 @@ export function ImportMembersModal({ open, onClose, onImported }: { open: boolea
           }
         }
 
-        const ministry = d.ministry ? ministries.find((m) => m.name.toLowerCase() === d.ministry!.toLowerCase()) : undefined;
+        // Google Forms "select all that apply" questions export multiple
+        // choices into one cell, joined by commas (e.g. "Choir, Youth
+        // Ministry"). We split on commas/semicolons and match each piece
+        // against your existing ministries, case-insensitively.
+        const requestedNames = (d.ministry ?? '')
+          .split(/[,;]/)
+          .map((n) => n.trim())
+          .filter(Boolean);
 
-        await createMember({
+        const matchedMinistries = requestedNames
+          .map((name) => ministries.find((m) => m.name.toLowerCase() === name.toLowerCase()))
+          .filter((m): m is (typeof ministries)[number] => !!m);
+
+        const unmatchedNames = requestedNames.filter(
+          (name) => !ministries.some((m) => m.name.toLowerCase() === name.toLowerCase())
+        );
+        if (unmatchedNames.length > 0) {
+          warnings.push(
+            `Row ${row.rowNumber} (${d.first_name} ${d.last_name}): ministry "${unmatchedNames.join(
+              ', '
+            )}" not found — skipped. Create it on the Ministries page first, then re-import if needed.`
+          );
+        }
+
+        const created = await createMember({
           first_name: d.first_name,
           last_name: d.last_name,
           date_of_birth: d.date_of_birth || null,
@@ -111,7 +134,12 @@ export function ImportMembersModal({ open, onClose, onImported }: { open: boolea
           baptism_date: d.baptism_date || null,
           date_joined: d.date_joined || new Date().toISOString().slice(0, 10),
           district: d.district || null,
-          ministry_id: ministry?.id ?? null,
+          // The first matched ministry becomes the member's "primary"
+          // ministry (shown on their profile and used for Ministry Leader
+          // edit permissions). Every matched ministry — including this
+          // first one — is also added to that ministry's member roster
+          // just below, so multi-ministry membership is fully preserved.
+          ministry_id: matchedMinistries[0]?.id ?? null,
           status: (d.status as any) || 'active',
           spouse_name: d.spouse_name || null,
           children_names: d.children_names || null,
@@ -120,6 +148,11 @@ export function ImportMembersModal({ open, onClose, onImported }: { open: boolea
           profile_image_url: profileImageUrl,
           created_by: profile?.id,
         });
+
+        for (const ministry of matchedMinistries) {
+          await addMemberToMinistry(ministry.id, created.id);
+        }
+
         imported++;
       } catch (err) {
         errors.push(`Row ${row.rowNumber}: ${(err as Error).message}`);
@@ -127,7 +160,7 @@ export function ImportMembersModal({ open, onClose, onImported }: { open: boolea
       setProgress((p) => ({ ...p, done: p.done + 1 }));
     }
 
-    setResult({ imported, failed: errors.length, errors });
+    setResult({ imported, failed: errors.length, errors, warnings });
     setStep('done');
     onImported();
   }
@@ -152,7 +185,7 @@ export function ImportMembersModal({ open, onClose, onImported }: { open: boolea
           'Baptism Date': '2010-06-01',
           'Date Joined': '2015-01-10',
           District: 'Abeka',
-          Ministry: 'Choir',
+          Ministry: 'Choir, Youth Ministry',
           Status: 'active',
           Spouse: 'Jane Doe',
           Children: 'Sam, Ama',
@@ -297,6 +330,14 @@ export function ImportMembersModal({ open, onClose, onImported }: { open: boolea
               <p className="mb-1 font-medium">{result.failed} row(s) failed:</p>
               {result.errors.map((e, i) => (
                 <p key={i}>{e}</p>
+              ))}
+            </div>
+          )}
+          {result.warnings.length > 0 && (
+            <div className="mx-auto max-w-md rounded-lg bg-amber-50 p-3 text-left text-xs text-amber-800">
+              <p className="mb-1 font-medium">{result.warnings.length} ministry name(s) didn't match — member still imported:</p>
+              {result.warnings.map((w, i) => (
+                <p key={i}>{w}</p>
               ))}
             </div>
           )}

@@ -3,7 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Church, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -45,8 +45,8 @@ export function ResetPassword() {
     <div className="flex min-h-screen items-center justify-center bg-surface px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white">
-            <Church className="h-7 w-7" />
+          <div className="mb-3 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-slate-200">
+            <img src="public/abeka.png" alt="Abeka SDA Church logo" className="h-full w-full object-contain p-1.5" />
           </div>
           <h1 className="text-xl font-bold text-ink">Set a new password</h1>
         </div>

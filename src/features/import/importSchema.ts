@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { format, isValid } from 'date-fns';
 
 // Recognized spreadsheet column headers, matched case-insensitively and
 // ignoring extra spaces, so "First Name", "first_name", "FIRST NAME" all work.
@@ -31,6 +32,22 @@ export function normalizeHeader(header: string) {
   return header.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+/**
+ * Cells that Excel/Google Sheets formats as a "Date" come through from the
+ * spreadsheet-reading library as real JS Date objects (as long as the
+ * workbook is read with `cellDates: true` — see ImportMembersModal.tsx).
+ * Without this, they'd arrive as raw Excel serial numbers like "45353"
+ * (days since 1899-12-30), which Postgres correctly rejects as an invalid
+ * date. We convert any such Date object into a clean "YYYY-MM-DD" string
+ * here so it always reaches the database in a format it understands.
+ */
+function normalizeCellValue(value: unknown): string {
+  if (value instanceof Date) {
+    return isValid(value) ? format(value, 'yyyy-MM-dd') : '';
+  }
+  return String(value).trim();
+}
+
 /** Maps a raw spreadsheet row (keyed by original header text) to our internal field names. */
 export function mapRowToFields(rawRow: Record<string, unknown>): Record<string, string> {
   const normalizedEntries = Object.entries(rawRow).map(([k, v]) => [normalizeHeader(k), v] as const);
@@ -39,7 +56,7 @@ export function mapRowToFields(rawRow: Record<string, unknown>): Record<string, 
   for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
     const match = normalizedEntries.find(([header]) => aliases.includes(header));
     if (match && match[1] !== undefined && match[1] !== null) {
-      mapped[field] = String(match[1]).trim();
+      mapped[field] = normalizeCellValue(match[1]);
     }
   }
   return mapped;
