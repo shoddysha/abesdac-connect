@@ -17,6 +17,7 @@ import { fetchEvents, createEvent, updateEvent, deleteEvent } from '@/services/e
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/utils/cn';
+import type { Event } from '@/types/database';
 
 const schema = z.object({
   title: z.string().min(1, 'Required'),
@@ -31,7 +32,10 @@ type FormValues = z.infer<typeof schema>;
 export function Events() {
   const [searchParams] = useSearchParams();
   const { hasRole, profile } = useAuth();
+  // Ministry Leaders can create events; who can edit/delete a *specific*
+  // event is decided per-row below via canManageEvent().
   const canManage = hasRole('administrator', 'secretary');
+  const canCreate = hasRole('administrator', 'secretary', 'ministry_leader');
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(searchParams.get('action') === 'add');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -52,6 +56,12 @@ export function Events() {
   const daysInMonth = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) });
   const eventsByDay = (day: Date) => events.filter((e) => isSameDay(new Date(e.start_time), day));
 
+  // Admin/secretary manage every event; a Ministry Leader only manages
+  // events they personally created.
+  function canManageEvent(event: Event) {
+    return canManage || (profile?.role === 'ministry_leader' && event.created_by === profile.id);
+  }
+
   const visibleEvents = useMemo(() => {
     if (selectedDay) return events.filter((e) => isSameDay(new Date(e.start_time), selectedDay));
     return events.filter((e) => isSameMonth(new Date(e.start_time), month));
@@ -65,7 +75,7 @@ export function Events() {
 
   function openEdit(id: string) {
     const e = events.find((x) => x.id === id);
-    if (!e) return;
+    if (!e || !canManageEvent(e)) return;
     reset({
       title: e.title,
       description: e.description ?? '',
@@ -84,7 +94,7 @@ export function Events() {
         ...values,
         start_time: new Date(values.start_time).toISOString(),
         end_time: values.end_time ? new Date(values.end_time).toISOString() : null,
-        created_by: profile?.id,
+        ...(editingId ? {} : { created_by: profile?.id }),
       };
       if (editingId) {
         await updateEvent(editingId, payload as any);
@@ -100,9 +110,10 @@ export function Events() {
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(event: Event) {
+    if (!canManageEvent(event)) return;
     if (!confirm('Delete this event?')) return;
-    await deleteEvent(id);
+    await deleteEvent(event.id);
     toast.success('Event deleted');
     queryClient.invalidateQueries({ queryKey: ['events'] });
   }
@@ -114,7 +125,7 @@ export function Events() {
           <h1 className="text-2xl font-bold text-ink">Events</h1>
           <p className="text-sm text-slate-500">Plan and track church events.</p>
         </div>
-        {canManage && (
+        {canCreate && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> Create event
           </Button>
@@ -186,12 +197,12 @@ export function Events() {
                     )}
                   </div>
                 </div>
-                {canManage && (
+                {canManageEvent(event) && (
                   <div className="flex shrink-0 gap-1">
                     <button onClick={() => openEdit(event.id)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-ink">
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button onClick={() => handleDelete(event.id)} className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">
+                    <button onClick={() => handleDelete(event)} className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>

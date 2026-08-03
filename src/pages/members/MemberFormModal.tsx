@@ -44,6 +44,13 @@ const defaultValues: FormValues = {
   status: 'active',
 };
 
+// HTML date inputs report blank as "" (sometimes just whitespace), but
+// Postgres `date` columns only accept a real date or NULL — never "".
+function toNullableDate(value: string | undefined | null) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export function MemberFormModal({
   open,
   memberId,
@@ -124,23 +131,29 @@ export function MemberFormModal({
     try {
       let profile_image_url = imagePreview && !imageFile ? imagePreview : undefined;
 
+      // Sanitize once, use for both the create and update paths below.
+      const sanitized = {
+        ...values,
+        date_of_birth: toNullableDate(values.date_of_birth),
+        baptism_date: toNullableDate(values.baptism_date),
+        date_joined: toNullableDate(values.date_joined) ?? new Date().toISOString().slice(0, 10),
+        ministry_id: values.ministry_id || null,
+        email: values.email || null,
+      };
+
       if (isEdit) {
         if (imageFile) {
           profile_image_url = await uploadMemberImage(imageFile, memberQuery.data!.member_code);
         }
         await updateMember(memberId!, {
-          ...values,
-          ministry_id: values.ministry_id || null,
-          email: values.email || null,
+          ...sanitized,
           profile_image_url,
           updated_by: profile?.id,
         } as any);
         toast.success('Member updated');
       } else {
         const created = await createMember({
-          ...values,
-          ministry_id: values.ministry_id || null,
-          email: values.email || null,
+          ...sanitized,
           created_by: profile?.id,
         } as any);
         if (imageFile) {

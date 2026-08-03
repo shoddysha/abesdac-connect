@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, HeartHandshake, UserPlus, X, Users, ImagePlus } from 'lucide-react';
+import { Plus, Pencil, Trash2, HeartHandshake, UserPlus, X, Users, ImagePlus, Download } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
@@ -25,6 +25,7 @@ import { fetchMembers } from '@/services/members';
 import { uploadMinistryLogo } from '@/services/storage';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
+import type { Ministry } from '@/types/database';
 
 const schema = z.object({
   name: z.string().min(1, 'Required'),
@@ -33,13 +34,40 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+// Turns a ministry's member list into a downloadable CSV file.
+function downloadMembersCsv(ministryName: string, rows: any[]) {
+  const headers = ['Member Code', 'First Name', 'Last Name', 'Joined Ministry On'];
+  const lines = [
+    headers.join(','),
+    ...rows.map((row) => {
+      const m = row.members;
+      const cells = [
+        m?.member_code ?? '',
+        m?.first_name ?? '',
+        m?.last_name ?? '',
+        row.joined_at ? new Date(row.joined_at).toLocaleDateString() : '',
+      ];
+      return cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
+    }),
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const safeName = ministryName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  a.download = `${safeName}-members-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function Ministries() {
-  const { hasRole } = useAuth();
+  const { profile, hasRole } = useAuth();
   const canManage = hasRole('administrator', 'secretary');
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [membersModalId, setMembersModalId] = useState<string | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
 
   // Logo state for the create/edit form — see the "MINISTRY LOGO" section
   // further down (inside the <Modal> for the form) for where this is used.
@@ -48,9 +76,23 @@ export function Ministries() {
 
   const ministriesQuery = useQuery({ queryKey: ['ministries'], queryFn: fetchMinistries });
   const memberCountsQuery = useQuery({ queryKey: ['ministry-member-counts'], queryFn: fetchMinistryMemberCounts });
-  const profilesQuery = useQuery({ queryKey: ['profiles'], queryFn: fetchProfiles, enabled: canManage });
+  // Also needed by Ministry Leaders now (their Members modal add/remove
+  // controls need this), not just admin/secretary — the Leader dropdown
+  // inside the edit form is still locked to admin/secretary separately.
+  const profilesQuery = useQuery({
+    queryKey: ['profiles'],
+    queryFn: fetchProfiles,
+    enabled: canManage || profile?.role === 'ministry_leader',
+  });
   useRealtimeQuery('ministries', ['ministries']);
   useRealtimeQuery('ministry_members', ['ministry-member-counts']);
+
+  // A Ministry Leader manages exactly the one ministry they lead —
+  // identified by ministries.leader_id pointing at their own profile.
+  // Administrators/secretaries manage every ministry.
+  function canManageMinistry(ministry: Ministry) {
+    return canManage || (profile?.role === 'ministry_leader' && ministry.leader_id === profile.id);
+  }
 
   const {
     register,
@@ -69,7 +111,7 @@ export function Ministries() {
 
   function openEdit(id: string) {
     const m = ministriesQuery.data?.find((x) => x.id === id);
-    if (!m) return;
+    if (!m || !canManageMinistry(m)) return;
     reset({ name: m.name, description: m.description ?? '', leader_id: m.leader_id ?? '' });
     setEditingId(id);
     setLogoFile(null);
@@ -98,7 +140,15 @@ export function Ministries() {
         logo_url = await uploadMinistryLogo(logoFile, values.name);
       }
 
-      const payload = { ...values, leader_id: values.leader_id || null, ...(logo_url !== undefined ? { logo_url } : {}) };
+      // Ministry Leaders can edit their ministry's info, but reassigning
+      // who leads it is an org-level decision reserved for admin/secretary
+      // — the Leader field is disabled for them in the form below, and we
+      // additionally strip it out here as defense in depth.
+      const payload = {
+        ...values,
+        ...(canManage ? { leader_id: values.leader_id || null } : {}),
+        ...(logo_url !== undefined ? { logo_url } : {}),
+      };
       if (editingId) {
         await updateMinistry(editingId, payload);
         toast.success('Ministry updated');
@@ -115,13 +165,31 @@ export function Ministries() {
   // ------------------------------------------------------------------
 
   async function handleDelete(id: string) {
+    if (!canManage) return; // deleting a ministry stays admin/secretary-only
     if (!confirm('Delete this ministry? Members will be unassigned, not deleted.')) return;
     await deleteMinistry(id);
     toast.success('Ministry deleted');
     queryClient.invalidateQueries({ queryKey: ['ministries'] });
   }
 
+  async function handleExport(ministry: Ministry) {
+    setExportingId(ministry.id);
+    try {
+      const rows = await fetchMinistryMembers(ministry.id);
+      if (!rows || rows.length === 0) {
+        toast('No members to export yet', { icon: 'ℹ️' });
+        return;
+      }
+      downloadMembersCsv(ministry.name, rows);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setExportingId(null);
+    }
+  }
+
   const leaderOptions = (profilesQuery.data ?? []).map((p) => ({ value: p.id, label: p.full_name }));
+  const openMembersMinistry = ministriesQuery.data?.find((m) => m.id === membersModalId);
 
   return (
     <div className="space-y-5">
@@ -143,53 +211,64 @@ export function Ministries() {
         <EmptyState icon={HeartHandshake} title="No ministries yet" />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {ministriesQuery.data!.map((ministry) => (
-            <Card key={ministry.id}>
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  {/* MINISTRY LOGO (card view) — falls back to the generic icon when no logo_url is set */}
-                  {ministry.logo_url ? (
-                    <img
-                      src={ministry.logo_url}
-                      alt={`${ministry.name} logo`}
-                      className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-slate-200"
-                    />
-                  ) : (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-50">
-                      <HeartHandshake className="h-5 w-5 text-accent" />
+          {ministriesQuery.data!.map((ministry) => {
+            const canManageThis = canManageMinistry(ministry);
+            return (
+              <Card key={ministry.id}>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    {/* MINISTRY LOGO (card view) — falls back to the generic icon when no logo_url is set */}
+                    {ministry.logo_url ? (
+                      <img
+                        src={ministry.logo_url}
+                        alt={`${ministry.name} logo`}
+                        className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-slate-200"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-50">
+                        <HeartHandshake className="h-5 w-5 text-accent" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-semibold text-ink">{ministry.name}</h3>
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-500">{ministry.description || 'No description'}</p>
                     </div>
-                  )}
-                  <div>
-                    <h3 className="font-semibold text-ink">{ministry.name}</h3>
-                    <p className="mt-1 line-clamp-2 text-sm text-slate-500">{ministry.description || 'No description'}</p>
                   </div>
                 </div>
-              </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                <span>Leader: {ministry.profiles?.full_name ?? 'Unassigned'}</span>
-                {/* MEMBER COUNT — pulled from ministry_members via fetchMinistryMemberCounts() */}
-                <span className="flex items-center gap-1 font-medium text-ink">
-                  <Users className="h-3.5 w-3.5 text-slate-400" />
-                  {memberCountsQuery.data?.[ministry.id] ?? 0}
-                </span>
-              </div>
-              <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
-                <Button variant="ghost" size="sm" onClick={() => setMembersModalId(ministry.id)}>
-                  <UserPlus className="h-3.5 w-3.5" /> Members
-                </Button>
-                {canManage && (
-                  <>
+                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                  <span>Leader: {ministry.profiles?.full_name ?? 'Unassigned'}</span>
+                  {/* MEMBER COUNT — pulled from ministry_members via fetchMinistryMemberCounts() */}
+                  <span className="flex items-center gap-1 font-medium text-ink">
+                    <Users className="h-3.5 w-3.5 text-slate-400" />
+                    {memberCountsQuery.data?.[ministry.id] ?? 0}
+                  </span>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                  <Button variant="ghost" size="sm" onClick={() => setMembersModalId(ministry.id)}>
+                    <UserPlus className="h-3.5 w-3.5" /> Members
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleExport(ministry)}
+                    isLoading={exportingId === ministry.id}
+                  >
+                    <Download className="h-3.5 w-3.5" /> Export
+                  </Button>
+                  {canManageThis && (
                     <Button variant="ghost" size="sm" onClick={() => openEdit(ministry.id)}>
                       <Pencil className="h-3.5 w-3.5" /> Edit
                     </Button>
+                  )}
+                  {canManage && (
                     <Button variant="ghost" size="sm" onClick={() => handleDelete(ministry.id)}>
                       <Trash2 className="h-3.5 w-3.5" /> Delete
                     </Button>
-                  </>
-                )}
-              </div>
-            </Card>
-          ))}
+                  )}
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -220,6 +299,8 @@ export function Ministries() {
           <Select
             label="Leader"
             placeholder="No leader assigned"
+            disabled={!canManage}
+            hint={!canManage ? 'Only administrators and secretaries can reassign a ministry leader.' : undefined}
             options={[{ value: '', label: 'No leader assigned' }, ...leaderOptions]}
             {...register('leader_id')}
           />
@@ -234,8 +315,12 @@ export function Ministries() {
         </form>
       </Modal>
 
-      {membersModalId && (
-        <MinistryMembersModal ministryId={membersModalId} onClose={() => setMembersModalId(null)} canManage={canManage} />
+      {membersModalId && openMembersMinistry && (
+        <MinistryMembersModal
+          ministryId={membersModalId}
+          onClose={() => setMembersModalId(null)}
+          canManage={canManageMinistry(openMembersMinistry)}
+        />
       )}
     </div>
   );

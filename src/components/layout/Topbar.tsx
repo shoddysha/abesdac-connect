@@ -22,8 +22,12 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           <p className="text-sm font-medium text-ink">{profile?.full_name}</p>
           <p className="text-xs capitalize text-slate-500">{profile?.role.replace('_', ' ')}</p>
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary">
-          <UserIcon className="h-4 w-4" />
+        <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary-50 text-primary">
+          {profile?.avatar_url ? (
+            <img src={profile.avatar_url} alt={profile.full_name} className="h-full w-full object-cover" />
+          ) : (
+            <UserIcon className="h-4 w-4" />
+          )}
         </div>
         <button
           onClick={handleSignOut}

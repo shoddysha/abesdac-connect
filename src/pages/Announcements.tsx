@@ -21,6 +21,7 @@ import {
 } from '@/services/announcements';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
+import type { Announcement } from '@/types/database';
 
 const schema = z.object({
   title: z.string().min(1, 'Required'),
@@ -33,7 +34,10 @@ type FormValues = z.infer<typeof schema>;
 export function Announcements() {
   const [searchParams] = useSearchParams();
   const { hasRole, profile } = useAuth();
+  // Ministry Leaders can post announcements; who can edit/delete/pin a
+  // *specific* one is decided per-row below via canManageAnnouncement().
   const canManage = hasRole('administrator', 'secretary');
+  const canCreate = hasRole('administrator', 'secretary', 'ministry_leader');
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(searchParams.get('action') === 'add');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -50,6 +54,12 @@ export function Announcements() {
 
   const announcements = query.data ?? [];
 
+  // Admin/secretary manage every announcement; a Ministry Leader only
+  // manages announcements they personally posted.
+  function canManageAnnouncement(a: Announcement) {
+    return canManage || (profile?.role === 'ministry_leader' && a.created_by === profile.id);
+  }
+
   function openCreate() {
     reset({ title: '', body: '', is_pinned: false, expires_at: '' });
     setEditingId(null);
@@ -58,7 +68,7 @@ export function Announcements() {
 
   function openEdit(id: string) {
     const a = announcements.find((x) => x.id === id);
-    if (!a) return;
+    if (!a || !canManageAnnouncement(a)) return;
     reset({ title: a.title, body: a.body, is_pinned: a.is_pinned, expires_at: a.expires_at?.slice(0, 10) ?? '' });
     setEditingId(id);
     setFormOpen(true);
@@ -69,7 +79,7 @@ export function Announcements() {
       const payload = {
         ...values,
         expires_at: values.expires_at ? new Date(values.expires_at).toISOString() : null,
-        created_by: profile?.id,
+        ...(editingId ? {} : { created_by: profile?.id }),
       };
       if (editingId) {
         await updateAnnouncement(editingId, payload as any);
@@ -85,15 +95,17 @@ export function Announcements() {
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(a: Announcement) {
+    if (!canManageAnnouncement(a)) return;
     if (!confirm('Delete this announcement?')) return;
-    await deleteAnnouncement(id);
+    await deleteAnnouncement(a.id);
     toast.success('Announcement deleted');
     queryClient.invalidateQueries({ queryKey: ['announcements'] });
   }
 
-  async function togglePin(id: string, current: boolean) {
-    await updateAnnouncement(id, { is_pinned: !current });
+  async function togglePin(a: Announcement) {
+    if (!canManageAnnouncement(a)) return;
+    await updateAnnouncement(a.id, { is_pinned: !a.is_pinned });
     queryClient.invalidateQueries({ queryKey: ['announcements'] });
   }
 
@@ -104,7 +116,7 @@ export function Announcements() {
           <h1 className="text-2xl font-bold text-ink">Announcements</h1>
           <p className="text-sm text-slate-500">Share updates with the whole church team.</p>
         </div>
-        {canManage && (
+        {canCreate && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> New announcement
           </Button>
@@ -132,10 +144,10 @@ export function Announcements() {
                     {a.expires_at && ` · Expires ${format(new Date(a.expires_at), 'MMM d, yyyy')}`}
                   </p>
                 </div>
-                {canManage && (
+                {canManageAnnouncement(a) && (
                   <div className="flex shrink-0 gap-1">
                     <button
-                      onClick={() => togglePin(a.id, a.is_pinned)}
+                      onClick={() => togglePin(a)}
                       className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-ink"
                       title={a.is_pinned ? 'Unpin' : 'Pin'}
                     >
@@ -144,7 +156,7 @@ export function Announcements() {
                     <button onClick={() => openEdit(a.id)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-ink">
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button onClick={() => handleDelete(a.id)} className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">
+                    <button onClick={() => handleDelete(a)} className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
