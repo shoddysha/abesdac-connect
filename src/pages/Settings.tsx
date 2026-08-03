@@ -1,14 +1,18 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useState, type ChangeEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Church, KeyRound, User } from 'lucide-react';
+import { KeyRound, User, Database } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateProfileDetails } from '@/services/users';
+import { uploadAvatar } from '@/services/storage';
+import { generateFullBackup, downloadBackupFile } from '@/services/backup';
+import { RestoreBackupModal } from '@/features/backup/RestoreBackupModal';
 
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Required'),
@@ -25,8 +29,20 @@ const passwordSchema = z
 type PasswordValues = z.infer<typeof passwordSchema>;
 
 export function Settings() {
-  const { profile, updatePassword } = useAuth();
+  const { profile, hasRole, updatePassword, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
+
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url ?? null);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+
+  function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  }
 
   const profileForm = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
@@ -38,9 +54,15 @@ export function Settings() {
   async function onProfileSubmit(values: ProfileValues) {
     if (!profile) return;
     try {
-      await updateProfileDetails(profile.id, values);
+      let avatar_url: string | undefined;
+      if (avatarFile) {
+        avatar_url = await uploadAvatar(avatarFile, profile.id);
+      }
+      await updateProfileDetails(profile.id, { ...values, ...(avatar_url ? { avatar_url } : {}) });
+      await refreshProfile();
       toast.success('Profile updated');
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      setAvatarFile(null);
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -56,6 +78,19 @@ export function Settings() {
     passwordForm.reset();
   }
 
+  async function handleBackup() {
+    setBackupLoading(true);
+    try {
+      const backup = await generateFullBackup();
+      downloadBackupFile(backup);
+      toast.success('Backup downloaded');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -66,6 +101,20 @@ export function Settings() {
       <Card>
         <CardHeader title="Your profile" action={<User className="h-4 w-4 text-slate-400" />} />
         <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-slate-100">
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <User className="h-6 w-6 text-slate-400" />
+              )}
+            </div>
+            <label className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-ink hover:bg-slate-50">
+              Upload photo
+              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+            </label>
+          </div>
+
           <Input label="Full name" {...profileForm.register('full_name')} error={profileForm.formState.errors.full_name?.message} />
           <Input label="Phone" {...profileForm.register('phone')} />
           <Input label="Email" value={profile?.email ?? ''} disabled hint="Contact an administrator to change your email." />
@@ -92,8 +141,30 @@ export function Settings() {
         </form>
       </Card>
 
+      {hasRole('administrator') && (
+        <Card>
+          <CardHeader title="Backup" action={<Database className="h-4 w-4 text-slate-400" />} />
+          <p className="mb-4 text-sm text-slate-500">
+            Download a complete snapshot of every member, ministry, attendance record, event, announcement, user, and
+            audit log as one JSON file — useful to keep a periodic copy outside the app.
+          </p>
+          <Button onClick={handleBackup} isLoading={backupLoading}>
+            Download full backup
+          </Button>
+            <Button variant="outline" className="ml-2" onClick={() => setRestoreOpen(true)}>
+                Restore from backup
+            </Button>
+          
+        </Card>
+       
+
+        <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />
+          
+        
+      )}
+
       <Card className="flex items-center gap-3">
-        <Church className="h-5 w-5 text-primary" />
+        <img src="/abeka.png" alt="Abeka SDA Church logo" className="h-8 w-8 rounded-md object-contain" />
         <div>
           <p className="text-sm font-medium text-ink">ABESDAC_Connect</p>
           <p className="text-xs text-slate-500">Church management system for Abeka SDA Church · v1.0.0</p>
