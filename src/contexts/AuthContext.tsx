@@ -12,6 +12,7 @@ interface AuthContextValue {
   requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
   hasRole: (...roles: UserRole[]) => boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -76,9 +77,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return roles.includes(profile.role);
   }
 
+  async function refreshProfile() {
+    if (session?.user) {
+      await loadProfile(session.user.id);
+    }
+  }
+
   return (
     <AuthContext.Provider
-      value={{ session, profile, loading, signIn, signOut, requestPasswordReset, updatePassword, hasRole }}
+      value={{
+        session,
+        profile,
+        loading,
+        signIn,
+        signOut,
+        requestPasswordReset,
+        updatePassword,
+        hasRole,
+        refreshProfile,
+      }}
     >
       {children}
     </AuthContext.Provider>

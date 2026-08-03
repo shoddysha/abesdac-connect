@@ -141,7 +141,7 @@ export function Settings() {
         </form>
       </Card>
 
-      {hasRole('administrator') && (
+{hasRole('administrator') && (
         <Card>
           <CardHeader title="Backup" action={<Database className="h-4 w-4 text-slate-400" />} />
           <p className="mb-4 text-sm text-slate-500">
@@ -151,17 +151,13 @@ export function Settings() {
           <Button onClick={handleBackup} isLoading={backupLoading}>
             Download full backup
           </Button>
-            <Button variant="outline" className="ml-2" onClick={() => setRestoreOpen(true)}>
-                Restore from backup
-            </Button>
-          
+          <Button variant="outline" className="ml-2" onClick={() => setRestoreOpen(true)}>
+            Restore from backup
+          </Button>
         </Card>
-       
-
-        <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />
-          
-        
       )}
+
+      <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />
 
       <Card className="flex items-center gap-3">
         <img src="/abeka.png" alt="Abeka SDA Church logo" className="h-8 w-8 rounded-md object-contain" />
