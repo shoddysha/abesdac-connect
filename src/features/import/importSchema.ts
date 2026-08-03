@@ -32,6 +32,25 @@ export function normalizeHeader(header: string) {
   return header.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+// Fallback keywords used ONLY when no exact header alias matches above.
+// Google Forms exports your full question text as the column header —
+// e.g. "Which ministry are you part of? (Select all that apply)" —
+// instead of a clean "Ministry" label, so an exact match will never hit.
+// If a still-unmapped header CONTAINS one of these keywords, it's used
+// as a last resort. This is what fixes ministry (and similar) columns
+// coming straight out of a Google Form without any manual renaming.
+const CONTAINS_FALLBACKS: Record<string, string[]> = {
+  ministry: ['ministry', 'ministries'],
+  first_name: ['first name'],
+  last_name: ['last name', 'surname'],
+  phone: ['phone', 'mobile', 'contact number'],
+  email: ['email'],
+  date_of_birth: ['birth'],
+  gender: ['gender', 'sex'],
+  district: ['district'],
+  image: ['photo', 'image', 'picture', 'upload'],
+};
+
 /**
  * Cells that Excel/Google Sheets formats as a "Date" come through from the
  * spreadsheet-reading library as real JS Date objects (as long as the
@@ -52,13 +71,30 @@ function normalizeCellValue(value: unknown): string {
 export function mapRowToFields(rawRow: Record<string, unknown>): Record<string, string> {
   const normalizedEntries = Object.entries(rawRow).map(([k, v]) => [normalizeHeader(k), v] as const);
   const mapped: Record<string, string> = {};
+  const usedHeaders = new Set<string>();
 
+  // Pass 1: exact alias matches — most reliable, tried first.
   for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
     const match = normalizedEntries.find(([header]) => aliases.includes(header));
     if (match && match[1] !== undefined && match[1] !== null) {
       mapped[field] = normalizeCellValue(match[1]);
+      usedHeaders.add(match[0]);
     }
   }
+
+  // Pass 2: keyword-contains fallback for fields that came up empty —
+  // this is what catches a raw Google Forms question as a header.
+  for (const [field, keywords] of Object.entries(CONTAINS_FALLBACKS)) {
+    if (mapped[field]) continue; // already found via an exact match above
+    const match = normalizedEntries.find(
+      ([header]) => !usedHeaders.has(header) && keywords.some((kw) => header.includes(kw))
+    );
+    if (match && match[1] !== undefined && match[1] !== null) {
+      mapped[field] = normalizeCellValue(match[1]);
+      usedHeaders.add(match[0]);
+    }
+  }
+
   return mapped;
 }
 
