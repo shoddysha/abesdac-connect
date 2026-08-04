@@ -36,6 +36,7 @@ ABESDAC_Connect lets church administrators and secretaries manage:
 - **Attendance** — check-in/out for Sabbath services, midweek services, and events, with attendance percentages
 - **Events** — calendar view, create/edit/delete
 - **Announcements** — pin important updates
+- **SMS Notifications** — send bulk SMS to members for events and announcements (via Arkesel)
 - **Reports** — member/attendance/ministry statistics with CSV, Excel, and PDF export
 - **Users** — role-based access control (Administrator, Secretary, Pastor, Ministry Leader)
 - **Audit logs** — every important action is recorded automatically
@@ -128,7 +129,10 @@ The schema script already creates these buckets for you, but let's confirm:
    ```
    VITE_SUPABASE_URL=https://your-project-ref.supabase.co
    VITE_SUPABASE_ANON_KEY=your-anon-public-key
-   VITE_CHURCH_NAME="Abeka SDA Church"
+   
+   # Optional: Arkesel SMS Configuration (see Step 7)
+   VITE_ARKESEL_API_KEY=your-arkesel-api-key
+   VITE_ARKESEL_SENDER_ID=AbekaSDAChu
    ```
    > Use the **anon / public** key, never the `service_role` key, in this file — the anon key is safe to expose in a browser app because all access is controlled by Row Level Security.
 5. Start the app:
@@ -154,6 +158,53 @@ Because this app has no separate backend server, the very first account is creat
    update public.profiles set role = 'administrator' where email = 'you@example.com';
    ```
 6. Go to the app and log in with that email and password. You now have full administrator access.
+
+---
+
+## Step 7 — Configure SMS (Optional)
+
+The app includes SMS notification functionality via [Arkesel](https://sms.arkesel.com/), a popular SMS gateway in Ghana. This feature is **optional** — the app works perfectly without it.
+
+### To enable SMS:
+
+1. **Create an Arkesel account**:
+   - Go to [sms.arkesel.com](https://sms.arkesel.com/)
+   - Sign up and verify your account
+   - Purchase SMS credits
+
+2. **Get your API key**:
+   - Log into your Arkesel dashboard
+   - Navigate to **API** or **Settings**
+   - Copy your API key
+
+3. **Configure the app**:
+   - Open your `.env` file
+   - Add these two lines:
+     ```
+     VITE_ARKESEL_API_KEY=your-actual-api-key-here
+     VITE_ARKESEL_SENDER_ID=AbekaSDAChu
+     ```
+   - The sender ID "AbekaSDAChu" (11 characters max) will appear as the sender name on recipients' phones
+   - Restart your dev server: `npm run dev`
+
+4. **Test it**:
+   - Log in as an administrator or secretary
+   - Go to **Events** or **Announcements**
+   - You'll see an SMS button when creating or viewing events/announcements
+   - Try sending a test SMS to yourself
+
+### SMS features:
+
+- **Manual SMS**: Send bulk SMS to selected members or entire ministries
+- **Event notifications**: Notify members about new events
+- **Event reminders**: Schedule automatic SMS reminders 24 hours before an event
+- **Announcement broadcasts**: Send important announcements to all active members
+- **SMS logs**: Track all sent messages, delivery status, and costs
+- **Phone number validation**: Automatically formats Ghana phone numbers (0XXXXXXXXX → 233XXXXXXXXX)
+
+### Pricing note:
+
+Arkesel charges per SMS sent (typically ₵0.03–0.08 per SMS depending on your plan). Monitor your usage in the Arkesel dashboard to avoid unexpected charges. The app shows a confirmation dialog before sending bulk SMS.
 
 ---
 
@@ -194,6 +245,47 @@ From the **Members** page, click **Import** (visible to Administrators and Secre
 
 ---
 
+## Using SMS notifications
+
+Administrators and Secretaries can send bulk SMS to members (requires [Arkesel configuration](#step-7--configure-sms-optional)):
+
+### From Events:
+1. Create or open an event
+2. Click the **Send SMS** button
+3. Write your message (e.g., "Join us for Youth Fellowship on Saturday at 3pm!")
+4. Choose recipients:
+   - **All members**: Send to everyone with a phone number
+   - **Specific ministry**: Filter by ministry (e.g., only Youth Ministry)
+   - **Selected members**: Manually pick individuals
+5. **Optional**: Check "Schedule reminder" to send an automatic reminder 24 hours before the event
+6. Review the recipient count and click **Send**
+
+### From Announcements:
+1. Create or open an announcement
+2. Click **Send SMS**
+3. The announcement text is pre-filled (you can edit it)
+4. Choose recipients (same options as events)
+5. Click **Send**
+
+### View SMS history:
+- Go to **Settings → SMS Logs** to see all sent messages
+- Click any log to see individual recipients and delivery status
+- Failed messages show the reason (invalid phone number, insufficient balance, etc.)
+
+### Manage scheduled SMS:
+- Go to **Settings → Scheduled SMS**
+- View all upcoming reminders
+- Edit the message or recipient list
+- Cancel a scheduled SMS before it sends
+
+### Tips:
+- Keep messages under 160 characters to avoid splitting into multiple SMS (which costs more)
+- Phone numbers are automatically validated — members without valid phone numbers are skipped
+- The app shows a confirmation with cost estimate before sending
+- Test with a small group first (e.g., only your ministry) before sending to all members
+
+---
+
 ## Row Level Security explained
 
 Row Level Security (RLS) is a PostgreSQL feature that Supabase uses to control **exactly which rows** a signed-in user can see or change — enforced by the database itself, not just by the app's interface.
@@ -226,6 +318,9 @@ If you ever need to add a new role or change permissions, edit the policies in `
    - `VITE_CHURCH_NAME`
    (same values as your local `.env` file)
 6. Click **Deploy**. After a minute, you'll get a live URL like `https://abesdac-connect.vercel.app`.
+7. **If using SMS**: Add your Arkesel credentials to Vercel's environment variables:
+   - `VITE_ARKESEL_API_KEY`
+   - `VITE_ARKESEL_SENDER_ID`
 
 ### Connect your production URL back to Supabase
 
@@ -272,7 +367,19 @@ Confirm Realtime is enabled for the relevant table: Supabase → Database → Re
 Widen your browser window or scroll the preview table right — the "Issues" column on the far right lists the exact validation problem for that row.
 
 **Build fails on Vercel**
-Make sure all three environment variables are set in Vercel's project settings (not just locally), then trigger a new deployment.
+Make sure all environment variables are set in Vercel's project settings (at minimum VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY; optionally VITE_ARKESEL_API_KEY and VITE_ARKESEL_SENDER_ID if using SMS), then trigger a new deployment.
+
+**SMS isn't working / "Arkesel API key is not configured" error**
+Your `.env` file is missing `VITE_ARKESEL_API_KEY` or it's not set correctly. Copy the key from your Arkesel dashboard, add it to `.env`, and restart `npm run dev`. For production, add it to your Vercel environment variables.
+
+**SMS sending fails with "Invalid phone number"**
+The app expects Ghana phone numbers in format 0XXXXXXXXX (10 digits starting with 0) or 233XXXXXXXXX (12 digits). Update the member's phone number in their profile to match this format.
+
+**SMS sent successfully but members didn't receive it**
+Check your Arkesel dashboard to confirm your account has sufficient SMS credits. Also verify the sender ID "AbekaSDAChu" is approved in your Arkesel account (some accounts require sender ID registration).
+
+**Scheduled SMS didn't send at the scheduled time**
+The app currently requires a manual trigger or backend process to check and send scheduled SMS. See the `processPendingScheduledSms` function in `src/services/sms.ts` — you can set up a cron job or Supabase Edge Function to call this periodically.
 
 ---
 

@@ -693,3 +693,138 @@ $$;
 grant execute on function public.get_checkin_session(text) to anon, authenticated;
 grant execute on function public.search_checkin_members(text, text) to anon, authenticated;
 grant execute on function public.self_check_in(text, uuid) to anon, authenticated;
+
+-- =====================================================================
+-- 17. SMS FUNCTIONALITY (Arkesel Integration)
+-- =====================================================================
+-- Track all SMS sent through the system for auditing and history
+
+do $$ begin
+  create type sms_status as enum ('pending', 'sent', 'failed', 'cancelled');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type sms_type as enum ('event_notification', 'event_reminder', 'announcement', 'manual');
+exception when duplicate_object then null; end $$;
+
+-- SMS Logs: records of all SMS sent or attempted
+create table if not exists public.sms_logs (
+  id uuid primary key default uuid_generate_v4(),
+  type sms_type not null,
+  status sms_status not null default 'pending',
+  
+  -- Reference to related entities
+  event_id uuid references public.events(id) on delete set null,
+  announcement_id uuid references public.announcements(id) on delete set null,
+  
+  -- SMS content and delivery
+  message text not null,
+  recipient_count integer not null default 0,
+  successful_count integer not null default 0,
+  failed_count integer not null default 0,
+  
+  -- Arkesel response
+  arkesel_response jsonb,
+  error_message text,
+  
+  -- Metadata
+  sent_by uuid references public.profiles(id),
+  sent_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_sms_logs_type on public.sms_logs (type);
+create index if not exists idx_sms_logs_status on public.sms_logs (status);
+create index if not exists idx_sms_logs_event on public.sms_logs (event_id);
+create index if not exists idx_sms_logs_announcement on public.sms_logs (announcement_id);
+create index if not exists idx_sms_logs_created_at on public.sms_logs (created_at desc);
+
+-- SMS Recipients: individual recipients for each SMS batch
+create table if not exists public.sms_recipients (
+  id uuid primary key default uuid_generate_v4(),
+  sms_log_id uuid not null references public.sms_logs(id) on delete cascade,
+  member_id uuid not null references public.members(id) on delete cascade,
+  phone_number text not null,
+  status sms_status not null default 'pending',
+  arkesel_message_id text,
+  error_message text,
+  sent_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_sms_recipients_log on public.sms_recipients (sms_log_id);
+create index if not exists idx_sms_recipients_member on public.sms_recipients (member_id);
+create index if not exists idx_sms_recipients_status on public.sms_recipients (status);
+
+-- Scheduled SMS: for automatic reminders (e.g., 24 hours before event)
+create table if not exists public.scheduled_sms (
+  id uuid primary key default uuid_generate_v4(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  message text not null,
+  scheduled_for timestamptz not null,
+  status sms_status not null default 'pending',
+  
+  -- Member filters (JSON for flexibility)
+  recipient_filters jsonb, -- e.g., {"ministry_id": "uuid", "all_members": true}
+  
+  -- Metadata
+  created_by uuid references public.profiles(id),
+  sent_at timestamptz,
+  sms_log_id uuid references public.sms_logs(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_scheduled_sms_event on public.scheduled_sms (event_id);
+create index if not exists idx_scheduled_sms_scheduled_for on public.scheduled_sms (scheduled_for);
+create index if not exists idx_scheduled_sms_status on public.scheduled_sms (status);
+
+-- ---- ROW LEVEL SECURITY FOR SMS TABLES ----
+alter table public.sms_logs enable row level security;
+alter table public.sms_recipients enable row level security;
+alter table public.scheduled_sms enable row level security;
+
+-- SMS Logs: admin and secretary can view all
+drop policy if exists "sms_logs_select_admin_secretary" on public.sms_logs;
+create policy "sms_logs_select_admin_secretary" on public.sms_logs
+  for select using (public.current_role() in ('administrator', 'secretary'));
+
+drop policy if exists "sms_logs_insert_admin_secretary" on public.sms_logs;
+create policy "sms_logs_insert_admin_secretary" on public.sms_logs
+  for insert with check (public.current_role() in ('administrator', 'secretary'));
+
+drop policy if exists "sms_logs_update_admin_secretary" on public.sms_logs;
+create policy "sms_logs_update_admin_secretary" on public.sms_logs
+  for update using (public.current_role() in ('administrator', 'secretary'));
+
+-- SMS Recipients: admin and secretary can view all
+drop policy if exists "sms_recipients_select_admin_secretary" on public.sms_recipients;
+create policy "sms_recipients_select_admin_secretary" on public.sms_recipients
+  for select using (public.current_role() in ('administrator', 'secretary'));
+
+drop policy if exists "sms_recipients_insert_admin_secretary" on public.sms_recipients;
+create policy "sms_recipients_insert_admin_secretary" on public.sms_recipients
+  for insert with check (public.current_role() in ('administrator', 'secretary'));
+
+drop policy if exists "sms_recipients_update_admin_secretary" on public.sms_recipients;
+create policy "sms_recipients_update_admin_secretary" on public.sms_recipients
+  for update using (public.current_role() in ('administrator', 'secretary'));
+
+-- Scheduled SMS: admin and secretary can manage
+drop policy if exists "scheduled_sms_admin_secretary" on public.scheduled_sms;
+create policy "scheduled_sms_admin_secretary" on public.scheduled_sms
+  for all using (public.current_role() in ('administrator', 'secretary'))
+  with check (public.current_role() in ('administrator', 'secretary'));
+
+-- Add scheduled_sms to realtime
+do $$ begin
+  alter publication supabase_realtime add table public.sms_logs;
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter publication supabase_realtime add table public.scheduled_sms;
+exception when duplicate_object then null; end $$;
+
+-- Trigger for scheduled_sms updated_at
+drop trigger if exists trg_scheduled_sms_updated_at on public.scheduled_sms;
+create trigger trg_scheduled_sms_updated_at before update on public.scheduled_sms for each row execute function public.set_updated_at();

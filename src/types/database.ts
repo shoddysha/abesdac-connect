@@ -8,6 +8,8 @@ export type Gender = 'male' | 'female';
 export type MaritalStatus = 'single' | 'married' | 'divorced' | 'widowed';
 export type AttendanceType = 'sabbath_service' | 'midweek_service' | 'event';
 export type EventStatus = 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+export type SmsStatus = 'pending' | 'sent' | 'failed' | 'cancelled';
+export type SmsType = 'event_notification' | 'event_reminder' | 'announcement' | 'manual';
 
 export interface Profile {
   id: string;
@@ -118,6 +120,64 @@ export interface AuditLog {
   record_id: string | null;
   description: string | null;
   created_at: string;
+}
+
+export interface SmsLog {
+  id: string;
+  type: SmsType;
+  status: SmsStatus;
+  event_id: string | null;
+  announcement_id: string | null;
+  message: string;
+  recipient_count: number;
+  successful_count: number;
+  failed_count: number;
+  arkesel_response: Record<string, any> | null;
+  error_message: string | null;
+  sent_by: string | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
+export interface SmsRecipient {
+  id: string;
+  sms_log_id: string;
+  member_id: string;
+  phone_number: string;
+  status: SmsStatus;
+  arkesel_message_id: string | null;
+  error_message: string | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
+export interface ScheduledSms {
+  id: string;
+  event_id: string;
+  message: string;
+  scheduled_for: string;
+  status: SmsStatus;
+  recipient_filters: RecipientFilters | null;
+  created_by: string | null;
+  sent_at: string | null;
+  sms_log_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecipientFilters {
+  ministry_id?: string;
+  all_members?: boolean;
+  member_ids?: string[];
+}
+
+export interface ArkeselSmsResponse {
+  code: string;
+  message: string;
+  data?: {
+    status: string;
+    message_id?: string;
+  };
 }
 
 // Note: this file previously also exported a `Database` type meant to be
