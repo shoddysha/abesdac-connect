@@ -179,7 +179,7 @@ async function createSmsRecipients(
         sent_at: status === 'sent' ? new Date().toISOString() : null,
       };
     })
-    .filter(Boolean);
+    .filter((r): r is NonNullable<typeof r> => r !== null);
 
   if (recipients.length === 0) return;
 
