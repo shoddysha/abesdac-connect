@@ -60,9 +60,11 @@ export function SmsLogsViewer() {
     <Card>
       <CardHeader
         title="SMS History"
-        description="View all sent SMS messages and their delivery status"
         action={<MessageSquare className="h-4 w-4 text-slate-400" />}
       />
+      <p className="mb-4 -mt-2 text-sm text-slate-500">
+        View all sent SMS messages and their delivery status
+      </p>
 
       {isLoading ? (
         <Spinner />
