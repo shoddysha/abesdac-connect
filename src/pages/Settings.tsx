@@ -13,6 +13,8 @@ import { updateProfileDetails } from '@/services/users';
 import { uploadAvatar } from '@/services/storage';
 import { generateFullBackup, downloadBackupFile } from '@/services/backup';
 import { RestoreBackupModal } from '@/features/backup/RestoreBackupModal';
+import { ScheduledSmsManager } from '@/features/sms/ScheduledSmsManager';
+import { SmsLogsViewer } from '@/features/sms/SmsLogsViewer';
 
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Required'),
@@ -155,6 +157,13 @@ export function Settings() {
             Restore from backup
           </Button>
         </Card>
+      )}
+
+      {hasRole('administrator', 'secretary') && (
+        <>
+          <ScheduledSmsManager />
+          <SmsLogsViewer />
+        </>
       )}
 
       <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />

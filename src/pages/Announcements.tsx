@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Pin, Megaphone } from 'lucide-react';
+import { Plus, Pencil, Trash2, Pin, Megaphone, MessageSquare } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -19,6 +19,7 @@ import {
   updateAnnouncement,
   deleteAnnouncement,
 } from '@/services/announcements';
+import { SendSmsModal } from '@/features/sms/SendSmsModal';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Announcement } from '@/types/database';
@@ -41,6 +42,8 @@ export function Announcements() {
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(searchParams.get('action') === 'add');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [smsModalOpen, setSmsModalOpen] = useState(false);
+  const [selectedAnnouncementForSms, setSelectedAnnouncementForSms] = useState<Announcement | null>(null);
 
   const query = useQuery({ queryKey: ['announcements'], queryFn: fetchAnnouncements });
   useRealtimeQuery('announcements', ['announcements']);
@@ -109,6 +112,11 @@ export function Announcements() {
     queryClient.invalidateQueries({ queryKey: ['announcements'] });
   }
 
+  function openSmsModal(announcement: Announcement) {
+    setSelectedAnnouncementForSms(announcement);
+    setSmsModalOpen(true);
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -146,6 +154,13 @@ export function Announcements() {
                 </div>
                 {canManageAnnouncement(a) && (
                   <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => openSmsModal(a)}
+                      className="rounded-md p-1.5 text-slate-400 hover:bg-secondary-50 hover:text-secondary"
+                      title="Send SMS"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </button>
                     <button
                       onClick={() => togglePin(a)}
                       className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-ink"
@@ -186,6 +201,21 @@ export function Announcements() {
           </div>
         </form>
       </Modal>
+
+      {/* SMS Modal */}
+      {selectedAnnouncementForSms && (
+        <SendSmsModal
+          open={smsModalOpen}
+          onClose={() => {
+            setSmsModalOpen(false);
+            setSelectedAnnouncementForSms(null);
+          }}
+          defaultMessage={`${selectedAnnouncementForSms.title}\n\n${selectedAnnouncementForSms.body}`}
+          smsType="announcement"
+          announcementId={selectedAnnouncementForSms.id}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['announcements'] })}
+        />
+      )}
     </div>
   );
 }

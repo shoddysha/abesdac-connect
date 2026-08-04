@@ -5,8 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, MapPin, CalendarDays } from 'lucide-react';
-import { format, isSameMonth, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from 'date-fns';
+import { Plus, Pencil, Trash2, MapPin, CalendarDays, MessageSquare, Clock } from 'lucide-react';
+import { format, isSameMonth, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, subHours } from 'date-fns';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
@@ -14,6 +14,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Badge, statusTone } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { fetchEvents, createEvent, updateEvent, deleteEvent } from '@/services/events';
+import { scheduleEventReminder } from '@/services/sms';
+import { SendSmsModal } from '@/features/sms/SendSmsModal';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/utils/cn';
@@ -41,6 +43,9 @@ export function Events() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [month, setMonth] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [smsModalOpen, setSmsModalOpen] = useState(false);
+  const [selectedEventForSms, setSelectedEventForSms] = useState<Event | null>(null);
+  const [scheduleReminder, setScheduleReminder] = useState(false);
 
   const eventsQuery = useQuery({ queryKey: ['events'], queryFn: fetchEvents });
   useRealtimeQuery('events', ['events']);
@@ -96,14 +101,38 @@ export function Events() {
         end_time: values.end_time ? new Date(values.end_time).toISOString() : null,
         ...(editingId ? {} : { created_by: profile?.id }),
       };
+      
+      let eventId = editingId;
+      
       if (editingId) {
         await updateEvent(editingId, payload as any);
         toast.success('Event updated');
       } else {
-        await createEvent(payload as any);
+        const newEvent = await createEvent(payload as any);
+        eventId = newEvent.id;
         toast.success('Event created');
       }
+      
+      // Schedule 24-hour reminder if checkbox is checked
+      if (scheduleReminder && eventId) {
+        try {
+          const eventStartTime = new Date(values.start_time);
+          const reminderTime = subHours(eventStartTime, 24);
+          
+          // Only schedule if reminder time is in the future
+          if (reminderTime > new Date()) {
+            const reminderMessage = `Reminder: ${values.title} is tomorrow at ${format(eventStartTime, 'h:mm a')}${values.location ? ` at ${values.location}` : ''}. See you there!`;
+            
+            await scheduleEventReminder(eventId, reminderMessage, reminderTime, { all_members: true });
+            toast.success('SMS reminder scheduled for 24 hours before the event');
+          }
+        } catch (err) {
+          toast.error('Failed to schedule SMS reminder');
+        }
+      }
+      
       setFormOpen(false);
+      setScheduleReminder(false);
       queryClient.invalidateQueries({ queryKey: ['events'] });
     } catch (err) {
       toast.error((err as Error).message);
@@ -116,6 +145,12 @@ export function Events() {
     await deleteEvent(event.id);
     toast.success('Event deleted');
     queryClient.invalidateQueries({ queryKey: ['events'] });
+  }
+
+  function openSmsModal(event: Event) {
+    setSelectedEventForSms(event);
+    const defaultMessage = `${event.title} - ${format(new Date(event.start_time), 'EEE, MMM d, yyyy at h:mm a')}${event.location ? ` at ${event.location}` : ''}. ${event.description || ''}`;
+    setSmsModalOpen(true);
   }
 
   return (
@@ -199,6 +234,13 @@ export function Events() {
                 </div>
                 {canManageEvent(event) && (
                   <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => openSmsModal(event)}
+                      className="rounded-md p-1.5 text-slate-400 hover:bg-secondary-50 hover:text-secondary"
+                      title="Send SMS"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </button>
                     <button onClick={() => openEdit(event.id)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-ink">
                       <Pencil className="h-4 w-4" />
                     </button>
@@ -232,6 +274,26 @@ export function Events() {
             ]}
             {...register('status')}
           />
+          
+          {/* Schedule SMS Reminder Checkbox */}
+          {!editingId && (
+            <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <input
+                type="checkbox"
+                checked={scheduleReminder}
+                onChange={(e) => setScheduleReminder(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 text-sm font-medium text-ink">
+                  <Clock className="h-4 w-4 text-secondary" />
+                  Schedule SMS reminder
+                </div>
+                <p className="text-xs text-slate-500">Send automatic reminder to all members 24 hours before event</p>
+              </div>
+            </label>
+          )}
+          
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
               Cancel
@@ -242,6 +304,21 @@ export function Events() {
           </div>
         </form>
       </Modal>
+
+      {/* SMS Modal */}
+      {selectedEventForSms && (
+        <SendSmsModal
+          open={smsModalOpen}
+          onClose={() => {
+            setSmsModalOpen(false);
+            setSelectedEventForSms(null);
+          }}
+          defaultMessage={`${selectedEventForSms.title} - ${format(new Date(selectedEventForSms.start_time), 'EEE, MMM d, yyyy at h:mm a')}${selectedEventForSms.location ? ` at ${selectedEventForSms.location}` : ''}. ${selectedEventForSms.description || ''}`}
+          smsType="event_notification"
+          eventId={selectedEventForSms.id}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['events'] })}
+        />
+      )}
     </div>
   );
 }
