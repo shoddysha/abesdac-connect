@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
-import { ClipboardCheck, LogIn, LogOut, Search, QrCode } from 'lucide-react';
+import { ClipboardCheck, LogIn, LogOut, Search, QrCode, Download } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Input';
@@ -75,6 +75,44 @@ export function Attendance() {
     queryClient.invalidateQueries({ queryKey: ['attendance'] });
   }
 
+  function exportToCSV() {
+    if (!attendanceQuery.data?.length) {
+      toast.error('No attendance data to export');
+      return;
+    }
+
+    const headers = ['Member Code', 'First Name', 'Last Name', 'Check-in Time', 'Check-out Time', 'Duration (min)'];
+    const rows = filteredMembers
+      .map((member) => {
+        const record = attendanceByMember.get(member.id);
+        if (!record) return null;
+
+        const checkIn = record.check_in_time ? new Date(record.check_in_time) : null;
+        const checkOut = record.check_out_time ? new Date(record.check_out_time) : null;
+        const duration = checkIn && checkOut ? Math.round((checkOut.getTime() - checkIn.getTime()) / 60000) : '';
+
+        return [
+          member.member_code,
+          member.first_name,
+          member.last_name,
+          checkIn ? format(checkIn, 'h:mm a') : '',
+          checkOut ? format(checkOut, 'h:mm a') : '',
+          duration,
+        ];
+      })
+      .filter(Boolean);
+
+    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `attendance_${serviceDate}_${attendanceType}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('Attendance exported');
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -82,15 +120,22 @@ export function Attendance() {
           <h1 className="text-2xl font-bold text-ink">Attendance</h1>
           <p className="text-sm text-slate-500">Record check-ins for services and events.</p>
         </div>
-        {canManage && (
-          <Button
-            variant="outline"
-            onClick={() => setQrModalOpen(true)}
-            disabled={attendanceType === 'event' && !eventId}
-          >
-            <QrCode className="h-4 w-4" /> QR check-in
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {canManage && presentCount > 0 && (
+            <Button variant="outline" onClick={exportToCSV}>
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
+          )}
+          {canManage && (
+            <Button
+              variant="outline"
+              onClick={() => setQrModalOpen(true)}
+              disabled={attendanceType === 'event' && !eventId}
+            >
+              <QrCode className="h-4 w-4" /> QR check-in
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>

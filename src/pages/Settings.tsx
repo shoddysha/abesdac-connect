@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { useState, type ChangeEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { KeyRound, User, Database } from 'lucide-react';
+import { KeyRound, User, Database, Bell, Clock, Shield } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -13,8 +13,7 @@ import { updateProfileDetails } from '@/services/users';
 import { uploadAvatar } from '@/services/storage';
 import { generateFullBackup, downloadBackupFile } from '@/services/backup';
 import { RestoreBackupModal } from '@/features/backup/RestoreBackupModal';
-import { ScheduledSmsManager } from '@/features/sms/ScheduledSmsManager';
-import { SmsLogsViewer } from '@/features/sms/SmsLogsViewer';
+
 
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Required'),
@@ -143,7 +142,7 @@ export function Settings() {
         </form>
       </Card>
 
-{hasRole('administrator') && (
+      {hasRole('administrator') && (
         <Card>
           <CardHeader title="Backup" action={<Database className="h-4 w-4 text-slate-400" />} />
           <p className="mb-4 text-sm text-slate-500">
@@ -159,14 +158,62 @@ export function Settings() {
         </Card>
       )}
 
-      {hasRole('administrator', 'secretary') && (
-        <>
-          <ScheduledSmsManager />
-          <SmsLogsViewer />
-        </>
+      <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />
+
+      {hasRole('administrator') && (
+        <Card>
+          <CardHeader title="System notifications" action={<Bell className="h-4 w-4 text-slate-400" />} />
+          <p className="mb-4 text-sm text-slate-500">
+            Configure automated reminders and notifications for birthdays, events, and follow-ups.
+          </p>
+          <div className="space-y-3">
+            <label className="flex items-center gap-3">
+              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" defaultChecked />
+              <span className="text-sm text-ink">Send birthday SMS to members automatically</span>
+            </label>
+            <label className="flex items-center gap-3">
+              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" defaultChecked />
+              <span className="text-sm text-ink">Event reminder notifications (24 hours before)</span>
+            </label>
+            <label className="flex items-center gap-3">
+              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" />
+              <span className="text-sm text-ink">Weekly attendance summary reports</span>
+            </label>
+          </div>
+        </Card>
       )}
 
-      <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />
+      {hasRole('administrator') && (
+        <Card>
+          <CardHeader title="Session timeout" action={<Clock className="h-4 w-4 text-slate-400" />} />
+          <p className="mb-4 text-sm text-slate-500">
+            Automatically log out users after a period of inactivity for security.
+          </p>
+          <div className="flex items-center gap-4">
+            <Input
+              type="number"
+              label="Idle timeout (minutes)"
+              defaultValue="15"
+              hint="Current setting: 15 minutes of inactivity"
+              className="max-w-xs"
+            />
+            <Button>Update</Button>
+          </div>
+        </Card>
+      )}
+
+      {hasRole('administrator') && (
+        <Card>
+          <CardHeader title="Audit & security" action={<Shield className="h-4 w-4 text-slate-400" />} />
+          <p className="mb-4 text-sm text-slate-500">
+            View security logs, manage user permissions, and configure data retention policies.
+          </p>
+          <div className="space-y-2">
+            <Button variant="outline">View audit logs</Button>
+            <Button variant="outline" className="ml-2">Manage user roles</Button>
+          </div>
+        </Card>
+      )}
 
       <Card className="flex items-center gap-3">
         <img src="/abeka.png" alt="Abeka SDA Church logo" className="h-8 w-8 rounded-md object-contain" />

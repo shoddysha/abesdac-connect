@@ -1,14 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Users, UserCheck, CalendarDays, Activity, UserPlus, ClipboardCheck, Megaphone } from 'lucide-react';
+import { Users, UserCheck, CalendarDays, Activity, UserPlus, ClipboardCheck, Megaphone, Cake } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { StatCard } from '@/components/ui/StatCard';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { fetchMemberStats } from '@/services/members';
 import { fetchEvents } from '@/services/events';
 import { fetchAuditLogs } from '@/services/audit';
+import { fetchUpcomingBirthdays } from '@/services/birthdays';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { format, isFuture, formatDistanceToNow } from 'date-fns';
 
@@ -18,13 +20,16 @@ export function Dashboard() {
   const statsQuery = useQuery({ queryKey: ['member-stats'], queryFn: fetchMemberStats });
   const eventsQuery = useQuery({ queryKey: ['events'], queryFn: fetchEvents });
   const logsQuery = useQuery({ queryKey: ['audit-logs', 'recent'], queryFn: () => fetchAuditLogs(8) });
+  const birthdaysQuery = useQuery({ queryKey: ['upcoming-birthdays'], queryFn: fetchUpcomingBirthdays });
 
   useRealtimeQuery('members', ['member-stats']);
+  useRealtimeQuery('members', ['upcoming-birthdays']);
   useRealtimeQuery('events', ['events']);
   useRealtimeQuery('audit_logs', ['audit-logs', 'recent']);
 
   const stats = statsQuery.data;
   const upcomingEvents = (eventsQuery.data ?? []).filter((e) => isFuture(new Date(e.start_time))).slice(0, 5);
+  const upcomingBirthdays = (birthdaysQuery.data ?? []).slice(0, 7);
 
   const genderData = stats
     ? [
@@ -116,6 +121,41 @@ export function Dashboard() {
           )}
         </Card>
 
+        <Card>
+          <CardHeader title="Upcoming birthdays" action={<Cake className="h-4 w-4 text-slate-400" />} />
+          {birthdaysQuery.isLoading ? (
+            <Spinner />
+          ) : upcomingBirthdays.length === 0 ? (
+            <EmptyState icon={Cake} title="No birthdays soon" />
+          ) : (
+            <div className="space-y-2">
+              {upcomingBirthdays.map((member) => (
+                <Link
+                  key={member.id}
+                  to={`/members/${member.id}`}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink">
+                      {member.first_name} {member.last_name}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {format(new Date(member.date_of_birth!), 'MMM d')}
+                    </p>
+                  </div>
+                  {member.is_today ? (
+                    <Badge tone="accent">Today!</Badge>
+                  ) : (
+                    <span className="text-xs text-slate-400">{member.days_until}d</span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
         <Card>
           <CardHeader title="Quick actions" />
           <div className="flex flex-col gap-2">

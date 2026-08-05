@@ -41,37 +41,39 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
   return (
     <aside
       className={cn(
-        'fixed inset-y-0 left-0 z-40 w-64 transform bg-primary text-white transition-transform lg:static lg:translate-x-0',
+        'fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-primary text-white transition-transform lg:static lg:translate-x-0',
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       )}
     >
-      <div className="flex h-16 items-center gap-2 border-b border-white/10 px-5">
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-white/10 px-5">
         <img src="/abeka.png" alt="Abeka SDA Church logo" className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain p-1" />
         <div>
           <p className="text-sm font-bold leading-tight">ABESDAC_Connect</p>
           <p className="text-[11px] leading-tight text-white/60">Abeka SDA Church</p>
         </div>
       </div>
-      <nav className="flex flex-col gap-1 p-3">
-        {navItems
-          .filter((item) => !item.roles || (profile && item.roles.includes(profile.role)))
-          .map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              onClick={onNavigate}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  isActive ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
-                )
-              }
-            >
-              <item.icon className="h-4.5 w-4.5 shrink-0" />
-              {item.label}
-            </NavLink>
-          ))}
+      <nav className="flex-1 overflow-y-auto p-3">
+        <div className="flex flex-col gap-1">
+          {navItems
+            .filter((item) => !item.roles || (profile && item.roles.includes(profile.role)))
+            .map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                    isActive ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
+                  )
+                }
+              >
+                <item.icon className="h-4.5 w-4.5 shrink-0" />
+                {item.label}
+              </NavLink>
+            ))}
+        </div>
       </nav>
     </aside>
   );
