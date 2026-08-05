@@ -90,7 +90,7 @@ export function Login() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="flex items-center gap-3 mb-8 lg:hidden">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden" style={{ background: '#0F2A5F' }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden" style={{ background: '#f3f5fa' }}>
               <img src="/abeka.png" alt="Abeka SDA Church logo" className="h-full w-full object-contain p-1" />
             </div>
             <div className="text-[#0F2A5F] font-bold text-base">ABESDAC_Connect</div>

@@ -9,11 +9,6 @@ import type {
   Member,
 } from '@/types/database';
 
-// Arkesel API configuration
-const ARKESEL_API_URL = 'https://sms.arkesel.com/api/v2/sms/send';
-const ARKESEL_API_KEY = import.meta.env.VITE_ARKESEL_API_KEY as string;
-const ARKESEL_SENDER_ID = import.meta.env.VITE_ARKESEL_SENDER_ID || 'AbekaSDAChu';
-
 /**
  * Normalize phone number to Ghana format (233XXXXXXXXX)
  * Handles formats like: 0534268869, +233534268869, 233534268869
@@ -48,33 +43,44 @@ function normalizePhoneNumber(phone: string): string | null {
 }
 
 /**
- * Send SMS via Arkesel API
+ * Send SMS via Supabase Edge Function (which calls Arkesel API)
+ * This keeps the API key secure and hidden from the browser
  */
 async function sendToArkesel(recipients: string[], message: string): Promise<ArkeselSmsResponse> {
-  if (!ARKESEL_API_KEY) {
-    throw new Error('Arkesel API key is not configured');
+  // Get current user's session
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    throw new Error('Not authenticated');
   }
 
-  const response = await fetch(ARKESEL_API_URL, {
+  // Get Supabase URL from environment
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  if (!supabaseUrl) {
+    throw new Error('Supabase URL is not configured');
+  }
+
+  // Call Edge Function
+  const functionUrl = `${supabaseUrl}/functions/v1/send-sms`;
+
+  const response = await fetch(functionUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'api-key': ARKESEL_API_KEY,
+      'Authorization': `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({
-      sender: ARKESEL_SENDER_ID,
-      message: message,
       recipients: recipients,
+      message: message,
     }),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Arkesel API error: ${response.status} - ${errorText}`);
+  const data = await response.json();
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to send SMS via Edge Function');
   }
 
-  const data = await response.json();
-  return data as ArkeselSmsResponse;
+  return data.data as ArkeselSmsResponse;
 }
 
 /**

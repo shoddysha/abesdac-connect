@@ -161,50 +161,77 @@ Because this app has no separate backend server, the very first account is creat
 
 ---
 
-## Step 7 — Configure SMS (Optional)
+## Step 7 — Configure SMS (Secure Edge Function Approach)
 
-The app includes SMS notification functionality via [Arkesel](https://sms.arkesel.com/), a popular SMS gateway in Ghana. This feature is **optional** — the app works perfectly without it.
+The app includes SMS notification functionality via [Arkesel](https://sms.arkesel.com/), with your API key securely hidden using Supabase Edge Functions.
 
-### To enable SMS:
+### Prerequisites:
 
-1. **Create an Arkesel account**:
-   - Go to [sms.arkesel.com](https://sms.arkesel.com/)
-   - Sign up and verify your account
+1. **Supabase CLI installed:**
+   ```bash
+   npm install -g supabase
+   ```
+
+2. **Arkesel account with API key:**
+   - Sign up at [sms.arkesel.com](https://sms.arkesel.com/)
    - Purchase SMS credits
+   - Get your API key from dashboard
 
-2. **Get your API key**:
-   - Log into your Arkesel dashboard
-   - Navigate to **API** or **Settings**
-   - Copy your API key
+### Setup (5 steps):
 
-3. **Configure the app**:
-   - Open your `.env` file
-   - Add these two lines:
-     ```
-     VITE_ARKESEL_API_KEY=your-actual-api-key-here
-     VITE_ARKESEL_SENDER_ID=AbekaSDAChu
-     ```
-   - The sender ID "AbekaSDAChu" (11 characters max) will appear as the sender name on recipients' phones
-   - Restart your dev server: `npm run dev`
+**Step 1: Deploy Edge Function**
+```bash
+# Login to Supabase
+supabase login
 
-4. **Test it**:
-   - Log in as an administrator or secretary
-   - Go to **Events** or **Announcements**
-   - You'll see an SMS button when creating or viewing events/announcements
-   - Try sending a test SMS to yourself
+# Link your project (get ref ID from Supabase Dashboard → Settings)
+supabase link --project-ref your-project-reference-id
 
-### SMS features:
+# Deploy the function
+supabase functions deploy send-sms
+```
 
-- **Manual SMS**: Send bulk SMS to selected members or entire ministries
-- **Event notifications**: Notify members about new events
-- **Event reminders**: Schedule automatic SMS reminders 24 hours before an event
-- **Announcement broadcasts**: Send important announcements to all active members
-- **SMS logs**: Track all sent messages, delivery status, and costs
-- **Phone number validation**: Automatically formats Ghana phone numbers (0XXXXXXXXX → 233XXXXXXXXX)
+**Step 2: Store API Key Securely**
+```bash
+# Set your Arkesel credentials as secrets
+supabase secrets set ARKESEL_API_KEY=your-actual-api-key
+supabase secrets set ARKESEL_SENDER_ID=AbekaSDAChu
+```
 
-### Pricing note:
+**Step 3: Update Local .env**
+Your `.env` file should ONLY have Supabase credentials:
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
 
-Arkesel charges per SMS sent (typically ₵0.03–0.08 per SMS depending on your plan). Monitor your usage in the Arkesel dashboard to avoid unexpected charges. The app shows a confirmation dialog before sending bulk SMS.
+**No Arkesel credentials needed in .env!** They're securely stored in Supabase.
+
+**Step 4: Test Locally**
+```bash
+npm run dev
+```
+- Login as administrator or secretary
+- Go to Events → Click SMS button
+- Send test SMS
+
+**Step 5: Deploy to Vercel**
+Your Vercel environment variables should ONLY have:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+**No Arkesel variables needed!**
+
+### Detailed Instructions:
+- See `SMS_SETUP_CHECKLIST.md` for step-by-step setup
+- See `DEPLOY_SMS_EDGE_FUNCTION.md` for deployment guide
+- See `SMS_TESTING_GUIDE.md` for testing & troubleshooting
+
+### Security Benefits:
+✅ API key never exposed in browser  
+✅ API key never in your .env or Vercel  
+✅ Double permission check (RLS + Edge Function)  
+✅ Centralized logging in Supabase  
 
 ---
 
