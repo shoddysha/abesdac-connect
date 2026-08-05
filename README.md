@@ -31,16 +31,17 @@ This README assumes you are a **complete beginner**. Follow the steps in order a
 
 ABESDAC_Connect lets church administrators and secretaries manage:
 
-- **Members** — full profiles, search/filter, archive, Excel import with photos
+- **Members** — full profiles, search/filter, archive, Excel import with photos, birthday tracking
 - **Ministries** — create ministries, assign leaders and members
-- **Attendance** — check-in/out for Sabbath services, midweek services, and events, with attendance percentages
-- **Events** — calendar view, create/edit/delete
-- **Announcements** — pin important updates
-- **SMS** — bulk messaging, recurring service reminders, and message history
-- **SMS Notifications** — send bulk SMS to members for events and announcements (via Arkesel)
+- **Attendance** — check-in/out for Sabbath services, midweek services, and events, with attendance percentages and CSV export
+- **Events** — calendar view, create/edit/delete with automated SMS reminders
+- **Announcements** — pin important updates with SMS broadcasting
+- **SMS** — bulk messaging, recurring service reminders, scheduled notifications, and message history with delete function for failed messages
+- **Birthday Reminders** — automatic tracking and display of upcoming member birthdays
 - **Reports** — member/attendance/ministry statistics with CSV, Excel, and PDF export
 - **Users** — role-based access control (Administrator, Secretary, Pastor, Ministry Leader)
 - **Audit logs** — every important action is recorded automatically
+- **Settings** — system notifications, session timeout configuration, security management
 
 Everything updates **live** — if one secretary edits a member's record, every other signed-in user sees the change instantly, with no page refresh.
 

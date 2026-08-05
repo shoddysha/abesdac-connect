@@ -144,7 +144,7 @@ export function Dashboard() {
                     </p>
                   </div>
                   {member.is_today ? (
-                    <Badge tone="accent">Today!</Badge>
+                    <Badge tone="amber">Today!</Badge>
                   ) : (
                     <span className="text-xs text-slate-400">{member.days_until}d</span>
                   )}

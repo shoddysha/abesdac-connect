@@ -100,7 +100,7 @@ export function Attendance() {
           duration,
         ];
       })
-      .filter(Boolean);
+      .filter((row): row is (string | number)[] => row !== null);
 
     const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
