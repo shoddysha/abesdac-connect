@@ -15,6 +15,7 @@ import { Attendance } from '@/pages/Attendance';
 import { Events } from '@/pages/Events';
 import { Reports } from '@/pages/Reports';
 import { Announcements } from '@/pages/Announcements';
+import { Sms } from '@/pages/Sms';
 import { Users } from '@/pages/Users';
 import { Settings } from '@/pages/Settings';
 
@@ -50,6 +51,14 @@ export function App() {
               }
             />
             <Route path="/announcements" element={<Announcements />} />
+            <Route
+              path="/sms"
+              element={
+                <ProtectedRoute roles={['administrator', 'secretary']}>
+                  <Sms />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/users"
               element={

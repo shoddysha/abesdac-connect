@@ -1,0 +1,425 @@
+import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import toast from 'react-hot-toast';
+import {
+  MessageSquare,
+  Send,
+  Clock,
+  Users,
+  Filter,
+  CheckCircle2,
+  AlertCircle,
+} from 'lucide-react';
+import { Card, CardHeader } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Textarea, Select } from '@/components/ui/Input';
+import { Spinner } from '@/components/ui/EmptyState';
+import { fetchMinistries } from '@/services/ministries';
+import { fetchMembers } from '@/services/members';
+import { sendBulkSms, fetchSmsLogs } from '@/services/sms';
+import { SmsLogsViewer } from '@/features/sms/SmsLogsViewer';
+import { RecurringServiceReminders } from '@/features/sms/RecurringServiceReminders';
+import type { RecipientFilters } from '@/types/database';
+
+const bulkSmsSchema = z.object({
+  message: z.string().min(1, 'Message is required').max(500, 'Message too long'),
+  recipientType: z.enum(['all', 'ministry', 'manual']),
+  ministryId: z.string().optional(),
+});
+
+type BulkSmsFormValues = z.infer<typeof bulkSmsSchema>;
+type RecipientType = 'all' | 'ministry' | 'manual';
+
+export function Sms() {
+  const queryClient = useQueryClient();
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [isSending, setIsSending] = useState(false);
+  const [recipientCount, setRecipientCount] = useState(0);
+
+  const { data: ministries = [] } = useQuery({
+    queryKey: ['ministries'],
+    queryFn: fetchMinistries,
+  });
+
+  const { data: members = [], isLoading: membersLoading } = useQuery({
+    queryKey: ['members'],
+    queryFn: () => fetchMembers({ status: 'active' }),
+  });
+
+  const { data: smsLogs = [], isLoading: logsLoading } = useQuery({
+    queryKey: ['sms-logs'],
+    queryFn: () => fetchSmsLogs(),
+  });
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    reset,
+    setValue,
+    formState: { errors },
+  } = useForm<BulkSmsFormValues>({
+    resolver: zodResolver(bulkSmsSchema),
+    defaultValues: {
+      message: '',
+      recipientType: 'all',
+      ministryId: '',
+    },
+  });
+
+  const message = watch('message');
+  const recipientType = watch('recipientType') as RecipientType;
+  const ministryId = watch('ministryId');
+
+  const messageLength = message?.length || 0;
+  const smsCount = Math.ceil(messageLength / 160) || 1;
+
+  // Calculate recipient count
+  useEffect(() => {
+    async function calculateCount() {
+      if (recipientType === 'all') {
+        const allMembers = await fetchMembers({ status: 'active' });
+        const withPhone = allMembers.filter((m) => m.phone);
+        setRecipientCount(withPhone.length);
+      } else if (recipientType === 'ministry' && ministryId) {
+        const ministryMembers = await fetchMembers({ status: 'active', ministryId });
+        const withPhone = ministryMembers.filter((m) => m.phone);
+        setRecipientCount(withPhone.length);
+      } else if (recipientType === 'manual') {
+        setRecipientCount(selectedMembers.length);
+      } else {
+        setRecipientCount(0);
+      }
+    }
+    calculateCount();
+  }, [recipientType, ministryId, selectedMembers]);
+
+  async function onSubmit(values: BulkSmsFormValues) {
+    if (recipientCount === 0) {
+      toast.error('No recipients selected');
+      return;
+    }
+
+    const filters: RecipientFilters = {};
+
+    if (values.recipientType === 'all') {
+      filters.all_members = true;
+    } else if (values.recipientType === 'ministry' && values.ministryId) {
+      filters.ministry_id = values.ministryId;
+    } else if (values.recipientType === 'manual' && selectedMembers.length > 0) {
+      filters.member_ids = selectedMembers;
+    } else {
+      toast.error('Please select recipients');
+      return;
+    }
+
+    const confirmed = confirm(
+      `Send SMS to ${recipientCount} recipient(s)?\n\nThis will send approximately ${
+        recipientCount * smsCount
+      } SMS message(s).`
+    );
+
+    if (!confirmed) return;
+
+    setIsSending(true);
+
+    try {
+      const result = await sendBulkSms(values.message, filters, 'manual');
+
+      if (result.success) {
+        toast.success(result.message);
+        reset();
+        setSelectedMembers([]);
+        queryClient.invalidateQueries({ queryKey: ['sms-logs'] });
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to send SMS');
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  const handleMemberToggle = (memberId: string) => {
+    setSelectedMembers((prev) =>
+      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
+    );
+  };
+
+  const selectAllMembers = () => {
+    const allMemberIds = members.filter((m) => m.phone).map((m) => m.id);
+    setSelectedMembers(allMemberIds);
+  };
+
+  const clearSelection = () => {
+    setSelectedMembers([]);
+  };
+
+  const totalSent = smsLogs.filter((log) => log.status === 'sent').length;
+  const totalFailed = smsLogs.filter((log) => log.status === 'failed').length;
+  const successRate =
+    totalSent + totalFailed > 0 ? Math.round((totalSent / (totalSent + totalFailed)) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-ink">SMS Messaging</h1>
+        <p className="text-sm text-slate-500">
+          Send bulk SMS to members and manage recurring service reminders.
+        </p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
+              <MessageSquare className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Total Sent</p>
+              <p className="text-xl font-semibold text-ink">{totalSent}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Success Rate</p>
+              <p className="text-xl font-semibold text-ink">{successRate}%</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Failed</p>
+              <p className="text-xl font-semibold text-ink">{totalFailed}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-50">
+              <Users className="h-5 w-5 text-secondary" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Active Members</p>
+              <p className="text-xl font-semibold text-ink">
+                {members.filter((m) => m.phone).length}
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Send Bulk SMS Form */}
+        <Card>
+          <CardHeader title="Send Bulk SMS" action={<Send className="h-4 w-4 text-slate-400" />} />
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {/* Message Input */}
+            <div>
+              <Textarea
+                label="Message"
+                rows={5}
+                placeholder="Type your message here..."
+                {...register('message')}
+                error={errors.message?.message}
+                maxLength={500}
+              />
+              <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
+                <span>
+                  {messageLength} characters ({smsCount} SMS)
+                </span>
+                {messageLength > 160 && (
+                  <span className="text-amber-600">Message will be split into {smsCount} parts</span>
+                )}
+              </div>
+            </div>
+
+            {/* Recipient Type Selection */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-ink">
+                <Filter className="mb-1 inline h-4 w-4" /> Recipients
+              </label>
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setValue('recipientType', 'all');
+                    setValue('ministryId', '');
+                  }}
+                  className={`flex flex-col items-center gap-1 rounded-lg border-2 p-3 transition-colors ${
+                    recipientType === 'all'
+                      ? 'border-primary bg-primary-50 text-primary'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <Users className="h-5 w-5" />
+                  <span className="text-xs font-medium">All Members</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setValue('recipientType', 'ministry')}
+                  className={`flex flex-col items-center gap-1 rounded-lg border-2 p-3 transition-colors ${
+                    recipientType === 'ministry'
+                      ? 'border-primary bg-primary-50 text-primary'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <Filter className="h-5 w-5" />
+                  <span className="text-xs font-medium">By Ministry</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setValue('recipientType', 'manual');
+                    setValue('ministryId', '');
+                  }}
+                  className={`flex flex-col items-center gap-1 rounded-lg border-2 p-3 transition-colors ${
+                    recipientType === 'manual'
+                      ? 'border-primary bg-primary-50 text-primary'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <CheckCircle2 className="h-5 w-5" />
+                  <span className="text-xs font-medium">Select</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Ministry Selector */}
+            {recipientType === 'ministry' && (
+              <Select
+                label="Select Ministry"
+                {...register('ministryId')}
+                options={ministries.map((m) => ({ value: m.id, label: m.name }))}
+                placeholder="Choose a ministry"
+              />
+            )}
+
+            {/* Manual Member Selection */}
+            {recipientType === 'manual' && (
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm font-medium text-ink">Select Members</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllMembers}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearSelection}
+                      className="text-xs text-slate-500 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="max-h-60 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3">
+                  {membersLoading ? (
+                    <p className="text-center text-sm text-slate-500">Loading members...</p>
+                  ) : members.filter((m) => m.phone).length === 0 ? (
+                    <p className="text-center text-sm text-slate-500">
+                      No members with phone numbers found
+                    </p>
+                  ) : (
+                    members
+                      .filter((m) => m.phone)
+                      .map((member) => (
+                        <label
+                          key={member.id}
+                          className="flex cursor-pointer items-center gap-2 rounded p-2 hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedMembers.includes(member.id)}
+                            onChange={() => handleMemberToggle(member.id)}
+                            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                          />
+                          <div className="flex-1 text-sm">
+                            <div className="font-medium text-ink">
+                              {member.first_name} {member.last_name}
+                            </div>
+                            <div className="text-xs text-slate-500">{member.phone}</div>
+                          </div>
+                        </label>
+                      ))
+                  )}
+                </div>
+                {selectedMembers.length > 0 && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    {selectedMembers.length} member(s) selected
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Recipient Summary */}
+            <div className="rounded-lg bg-slate-50 p-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
+                <div className="text-sm text-slate-600">
+                  <p className="font-medium">
+                    Ready to send to {recipientCount} recipient{recipientCount !== 1 ? 's' : ''}
+                  </p>
+                  <p className="mt-1 text-xs">
+                    This will send approximately {recipientCount * smsCount} SMS message
+                    {recipientCount * smsCount !== 1 ? 's' : ''}.
+                    {recipientCount * smsCount > 100 && (
+                      <span className="text-amber-600">
+                        {' '}
+                        This is a large batch - please confirm before sending.
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              isLoading={isSending}
+              disabled={recipientCount === 0 || !message.trim()}
+              className="w-full"
+            >
+              <Send className="h-4 w-4" />
+              Send SMS to {recipientCount} Recipient{recipientCount !== 1 ? 's' : ''}
+            </Button>
+          </form>
+        </Card>
+
+        {/* Recurring Service Reminders */}
+        <RecurringServiceReminders />
+      </div>
+
+      {/* SMS History */}
+      <SmsLogsViewer />
+    </div>
+  );
+}

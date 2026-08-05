@@ -828,3 +828,44 @@ exception when duplicate_object then null; end $$;
 -- Trigger for scheduled_sms updated_at
 drop trigger if exists trg_scheduled_sms_updated_at on public.scheduled_sms;
 create trigger trg_scheduled_sms_updated_at before update on public.scheduled_sms for each row execute function public.set_updated_at();
+
+-- =====================================================================
+-- 18. RECURRING SERVICE REMINDERS (for weekly services)
+-- =====================================================================
+-- Table for managing recurring SMS reminders for regular services
+create table if not exists public.recurring_service_reminders (
+  id uuid primary key default uuid_generate_v4(),
+  service_type attendance_type not null, -- 'sabbath_service' or 'midweek_service'
+  message text not null,
+  send_time time not null, -- Time of day to send (e.g., '18:00')
+  send_day_offset integer not null default 1, -- Days before service (0 = same day, 1 = day before)
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  
+  -- Ensure only one reminder per service type
+  constraint unique_service_type unique (service_type)
+);
+
+create index if not exists idx_recurring_reminders_active on public.recurring_service_reminders (is_active);
+
+-- RLS for recurring reminders
+alter table public.recurring_service_reminders enable row level security;
+
+drop policy if exists "recurring_reminders_select_admin_secretary" on public.recurring_service_reminders;
+create policy "recurring_reminders_select_admin_secretary" on public.recurring_service_reminders
+  for select using (public.current_role() in ('administrator', 'secretary'));
+
+drop policy if exists "recurring_reminders_admin_secretary" on public.recurring_service_reminders;
+create policy "recurring_reminders_admin_secretary" on public.recurring_service_reminders
+  for all using (public.current_role() in ('administrator', 'secretary'))
+  with check (public.current_role() in ('administrator', 'secretary'));
+
+-- Add to realtime
+do $$ begin
+  alter publication supabase_realtime add table public.recurring_service_reminders;
+exception when duplicate_object then null; end $$;
+
+-- Trigger for updated_at
+drop trigger if exists trg_recurring_reminders_updated_at on public.recurring_service_reminders;
+create trigger trg_recurring_reminders_updated_at before update on public.recurring_service_reminders for each row execute function public.set_updated_at();

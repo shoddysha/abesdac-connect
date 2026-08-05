@@ -165,6 +165,17 @@ export interface ScheduledSms {
   updated_at: string;
 }
 
+export interface RecurringServiceReminder {
+  id: string;
+  service_type: 'sabbath_service' | 'midweek_service';
+  message: string;
+  send_time: string;
+  send_day_offset: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RecipientFilters {
   ministry_id?: string;
   all_members?: boolean;

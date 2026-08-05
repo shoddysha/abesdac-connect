@@ -195,7 +195,7 @@ export function Ministries() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-ink">Ministries</h1>
+          <h1 className="text-2xl font-bold text-ink">Ministries/Departments</h1>
           <p className="text-sm text-slate-500">Manage church ministries, leaders, and members.</p>
         </div>
         {canManage && (

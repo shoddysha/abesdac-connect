@@ -36,6 +36,7 @@ ABESDAC_Connect lets church administrators and secretaries manage:
 - **Attendance** — check-in/out for Sabbath services, midweek services, and events, with attendance percentages
 - **Events** — calendar view, create/edit/delete
 - **Announcements** — pin important updates
+- **SMS** — bulk messaging, recurring service reminders, and message history
 - **SMS Notifications** — send bulk SMS to members for events and announcements (via Arkesel)
 - **Reports** — member/attendance/ministry statistics with CSV, Excel, and PDF export
 - **Users** — role-based access control (Administrator, Secretary, Pastor, Ministry Leader)

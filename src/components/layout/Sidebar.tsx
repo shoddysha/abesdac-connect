@@ -7,6 +7,7 @@ import {
   CalendarDays,
   BarChart3,
   Megaphone,
+  MessageSquare,
   UserCog,
   Settings,
 } from 'lucide-react';
@@ -29,6 +30,7 @@ const navItems: NavItem[] = [
   { to: '/events', label: 'Events', icon: CalendarDays },
   { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['administrator', 'pastor'] },
   { to: '/announcements', label: 'Announcements', icon: Megaphone },
+  { to: '/sms', label: 'SMS', icon: MessageSquare, roles: ['administrator', 'secretary'] },
   { to: '/users', label: 'User Management', icon: UserCog, roles: ['administrator'] },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
