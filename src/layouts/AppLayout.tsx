@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
+import { NotificationBanner } from '@/components/NotificationBanner';
 import { useIdleLogout } from '@/hooks/useIdleLogout';
 
 export function AppLayout() {
@@ -18,7 +19,10 @@ export function AppLayout() {
         <Topbar onMenuClick={() => setMobileOpen((v) => !v)} />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="mx-auto max-w-7xl">
-            <Outlet />
+            <NotificationBanner />
+            <div className="mt-4">
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>

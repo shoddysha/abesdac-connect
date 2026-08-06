@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { MessageSquare, ChevronDown, ChevronUp, CheckCircle2, XCircle, Clock, Trash2 } from 'lucide-react';
+import {
+  MessageSquare, ChevronDown, ChevronUp,
+  CheckCircle2, XCircle, Clock, Trash2, Loader2,
+} from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
-import { fetchSmsLogs, fetchSmsRecipients } from '@/services/sms';
-import { supabase } from '@/lib/supabase';
+import { fetchSmsLogs, fetchSmsRecipients, deleteSmsLog } from '@/services/sms';
 import toast from 'react-hot-toast';
-import type { SmsLog, SmsStatus } from '@/types/database';
+import type { SmsStatus } from '@/types/database';
 
 export function SmsLogsViewer() {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: logs = [], isLoading } = useQuery({
@@ -20,7 +22,7 @@ export function SmsLogsViewer() {
     queryFn: () => fetchSmsLogs(),
   });
 
-  const { data: recipients = [] } = useQuery({
+  const { data: recipients = [], isFetching: recipientsFetching } = useQuery({
     queryKey: ['sms-recipients', expandedLogId],
     queryFn: () => fetchSmsRecipients(expandedLogId!),
     enabled: !!expandedLogId,
@@ -28,31 +30,21 @@ export function SmsLogsViewer() {
 
   function getStatusTone(status: SmsStatus): 'slate' | 'green' | 'red' | 'amber' {
     switch (status) {
-      case 'sent':
-        return 'green';
-      case 'failed':
-        return 'red';
-      case 'cancelled':
-        return 'slate';
-      case 'pending':
-        return 'amber';
-      default:
-        return 'slate';
+      case 'sent':      return 'green';
+      case 'failed':    return 'red';
+      case 'cancelled': return 'slate';
+      case 'pending':   return 'amber';
+      default:          return 'slate';
     }
   }
 
   function getTypeLabel(type: string): string {
     switch (type) {
-      case 'event_notification':
-        return 'Event';
-      case 'event_reminder':
-        return 'Event Reminder';
-      case 'announcement':
-        return 'Announcement';
-      case 'manual':
-        return 'Manual';
-      default:
-        return type;
+      case 'event_notification': return 'Event';
+      case 'event_reminder':     return 'Event Reminder';
+      case 'announcement':       return 'Announcement';
+      case 'manual':             return 'Manual';
+      default:                   return type;
     }
   }
 
@@ -61,18 +53,21 @@ export function SmsLogsViewer() {
   }
 
   async function handleDeleteLog(logId: string) {
-    if (!confirm('Delete this SMS log? This will also delete all recipient records.')) return;
+    if (!window.confirm('Delete this failed SMS log? All recipient records will also be removed.')) return;
 
+    setDeletingId(logId);
     try {
-      // Delete SMS log (recipients will be deleted via cascade)
-      const { error } = await supabase.from('sms_logs').delete().eq('id', logId);
+      await deleteSmsLog(logId);
 
-      if (error) throw error;
+      // Clear expand state if the deleted log was open
+      if (expandedLogId === logId) setExpandedLogId(null);
 
       toast.success('SMS log deleted');
       queryClient.invalidateQueries({ queryKey: ['sms-logs'] });
-    } catch (error) {
-      toast.error((error as Error).message || 'Failed to delete SMS log');
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to delete SMS log');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -82,8 +77,8 @@ export function SmsLogsViewer() {
         title="SMS History"
         action={<MessageSquare className="h-4 w-4 text-slate-400" />}
       />
-      <p className="mb-4 -mt-2 text-sm text-slate-500">
-        View all sent SMS messages and their delivery status
+      <p className="-mt-2 mb-4 text-sm text-slate-500">
+        View all sent SMS messages and their delivery status. Failed messages can be deleted.
       </p>
 
       {isLoading ? (
@@ -96,20 +91,25 @@ export function SmsLogsViewer() {
         />
       ) : (
         <div className="space-y-2">
-          {logs.map((log: any) => (
-            <div
-              key={log.id}
-              className="overflow-hidden rounded-lg border border-slate-200 transition-colors hover:border-slate-300"
-            >
-              {/* Log Header */}
-              <div className="flex items-start justify-between gap-4 p-3">
-                <button
-                  onClick={() => toggleExpand(log.id)}
-                  className="flex min-w-0 flex-1 items-start gap-4 text-left"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Badge tone={getStatusTone(log.status)}>{log.status}</Badge>
+          {logs.map((log: any) => {
+            const isDeleting = deletingId === log.id;
+            const isFailed   = log.status === 'failed';
+
+            return (
+              <div
+                key={log.id}
+                className="overflow-hidden rounded-lg border border-slate-200 transition-colors hover:border-slate-300"
+              >
+                {/* ── Row header ── */}
+                <div className="flex items-start gap-2 p-3">
+                  {/* Clickable summary area → toggles recipients */}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(log.id)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={getStatusTone(log.status as SmsStatus)}>{log.status}</Badge>
                       <span className="text-xs text-slate-500">{getTypeLabel(log.type)}</span>
                     </div>
                     <p className="mt-1 line-clamp-2 text-sm text-slate-600">{log.message}</p>
@@ -117,7 +117,7 @@ export function SmsLogsViewer() {
                       <span>
                         {format(new Date(log.sent_at || log.created_at), 'MMM d, yyyy · h:mm a')}
                       </span>
-                      <span>Sent by {log.profiles?.full_name || 'Unknown'}</span>
+                      <span>By {log.profiles?.full_name || 'Unknown'}</span>
                       <span className="flex items-center gap-1">
                         <CheckCircle2 className="h-3 w-3 text-green-600" />
                         {log.successful_count} sent
@@ -129,76 +129,86 @@ export function SmsLogsViewer() {
                         </span>
                       )}
                     </div>
+                  </button>
+
+                  {/* Action buttons — kept separate from the expand button */}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {/* Delete — only for failed logs */}
+                    {isFailed && (
+                      <button
+                        type="button"
+                        disabled={isDeleting}
+                        onClick={() => handleDeleteLog(log.id)}
+                        className="rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Delete failed SMS log"
+                        aria-label="Delete failed SMS log"
+                      >
+                        {isDeleting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    )}
+
+                    {/* Expand / collapse */}
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(log.id)}
+                      className="rounded-md p-2 text-slate-400 hover:bg-slate-100"
+                      title={expandedLogId === log.id ? 'Hide recipients' : 'View recipients'}
+                    >
+                      {expandedLogId === log.id ? (
+                        <ChevronUp className="h-5 w-5" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5" />
+                      )}
+                    </button>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {expandedLogId === log.id ? (
-                      <ChevronUp className="h-5 w-5 text-slate-400" />
+                </div>
+
+                {/* ── Expanded recipients ── */}
+                {expandedLogId === log.id && (
+                  <div className="border-t border-slate-200 bg-slate-50 p-3">
+                    <h4 className="mb-2 text-xs font-semibold uppercase text-slate-500">
+                      Recipients
+                    </h4>
+                    {recipientsFetching ? (
+                      <Spinner />
+                    ) : recipients.length === 0 ? (
+                      <p className="text-sm text-slate-500">No recipient records found.</p>
                     ) : (
-                      <ChevronDown className="h-5 w-5 text-slate-400" />
+                      <div className="space-y-1">
+                        {recipients.map((recipient: any) => (
+                          <div
+                            key={recipient.id}
+                            className="flex items-center justify-between rounded bg-white px-3 py-2 text-sm"
+                          >
+                            <div>
+                              <span className="font-medium text-ink">
+                                {recipient.members?.first_name} {recipient.members?.last_name}
+                              </span>
+                              <span className="ml-2 text-xs text-slate-500">
+                                {recipient.phone_number}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge tone={getStatusTone(recipient.status as SmsStatus)}>
+                                {recipient.status}
+                              </Badge>
+                              {recipient.status === 'sent'    && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                              {recipient.status === 'failed'  && <XCircle      className="h-4 w-4 text-red-600"   />}
+                              {recipient.status === 'pending' && <Clock        className="h-4 w-4 text-amber-600" />}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                </button>
-
-                {/* Delete Button - Only show for failed SMS */}
-                {log.status === 'failed' && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteLog(log.id);
-                    }}
-                    className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                    title="Delete failed SMS log"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
                 )}
               </div>
-
-              {/* Expanded Recipients */}
-              {expandedLogId === log.id && (
-                <div className="border-t border-slate-200 bg-slate-50 p-3">
-                  <h4 className="mb-2 text-xs font-semibold uppercase text-slate-500">
-                    Recipients ({recipients.length})
-                  </h4>
-                  {recipients.length === 0 ? (
-                    <p className="text-sm text-slate-500">Loading recipients...</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {recipients.map((recipient: any) => (
-                        <div
-                          key={recipient.id}
-                          className="flex items-center justify-between rounded bg-white px-3 py-2 text-sm"
-                        >
-                          <div>
-                            <span className="font-medium text-ink">
-                              {recipient.members?.first_name} {recipient.members?.last_name}
-                            </span>
-                            <span className="ml-2 text-xs text-slate-500">
-                              {recipient.phone_number}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge tone={getStatusTone(recipient.status)}>
-                              {recipient.status}
-                            </Badge>
-                            {recipient.status === 'sent' && (
-                              <CheckCircle2 className="h-4 w-4 text-green-600" />
-                            )}
-                            {recipient.status === 'failed' && (
-                              <XCircle className="h-4 w-4 text-red-600" />
-                            )}
-                            {recipient.status === 'pending' && (
-                              <Clock className="h-4 w-4 text-amber-600" />
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </Card>

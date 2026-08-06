@@ -3,17 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 
-const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+const DEFAULT_IDLE_TIMEOUT_MINUTES = 15;
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'] as const;
 const RESET_THROTTLE_MS = 1000; // don't restart the timer more than once/second
 
 /**
- * Signs the user out automatically after IDLE_TIMEOUT_MS of no activity
+ * Signs the user out automatically after configured minutes of no activity
  * (mouse, keyboard, touch, or scroll). Used in AppLayout.tsx so it only
  * runs while someone is actually inside the signed-in app — not on the
  * public login or QR check-in pages.
  *
- * To change the timeout length, edit IDLE_TIMEOUT_MS above.
+ * Timeout duration is configurable in Settings page.
  */
 export function useIdleLogout() {
   const { session, signOut } = useAuth();
@@ -23,6 +23,11 @@ export function useIdleLogout() {
 
   useEffect(() => {
     if (!session) return; // nothing to time out if no one is signed in
+
+    // Read timeout from localStorage (default 15 minutes)
+    const savedTimeout = localStorage.getItem('idle_timeout_minutes');
+    const timeoutMinutes = savedTimeout ? parseInt(savedTimeout) : DEFAULT_IDLE_TIMEOUT_MINUTES;
+    const IDLE_TIMEOUT_MS = timeoutMinutes * 60 * 1000;
 
     async function handleTimeout() {
       await signOut();

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
@@ -15,7 +15,7 @@ import { supabase } from '@/lib/supabase';
 
 // Schema for recurring service reminder
 const reminderSchema = z.object({
-  service_type: z.enum(['sabbath_service', 'midweek_service']),
+  service_type: z.enum(['sabbath_service', 'midweek_service', 'sunday_bible_study']),
   message: z.string().min(1, 'Message is required').max(500, 'Message too long'),
   send_time: z.string().min(1, 'Time is required'),
   send_day_offset: z.number().int().min(0).max(7),
@@ -26,7 +26,7 @@ type ReminderFormValues = z.infer<typeof reminderSchema>;
 
 interface RecurringReminder {
   id: string;
-  service_type: 'sabbath_service' | 'midweek_service';
+  service_type: 'sabbath_service' | 'midweek_service' | 'sunday_bible_study';
   message: string;
   send_time: string;
   send_day_offset: number;
@@ -91,6 +91,7 @@ export function RecurringServiceReminders() {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<ReminderFormValues>({
     resolver: zodResolver(reminderSchema),
@@ -102,6 +103,10 @@ export function RecurringServiceReminders() {
       is_active: true,
     },
   });
+
+  // Live values for the example hint
+  const watchedServiceType = useWatch({ control, name: 'service_type' });
+  const watchedOffset     = useWatch({ control, name: 'send_day_offset' });
 
   function openCreate() {
     reset({
@@ -167,13 +172,33 @@ export function RecurringServiceReminders() {
   }
 
   function getServiceLabel(type: string): string {
-    return type === 'sabbath_service' ? 'Sabbath Service' : 'Midweek Prayer';
+    switch (type) {
+      case 'sabbath_service':   return 'Sabbath Service';
+      case 'midweek_service':   return 'Midweek Prayer';
+      case 'sunday_bible_study': return 'Sunday Bible Study';
+      default: return type;
+    }
   }
 
   function getDayLabel(offset: number, serviceType: string): string {
     if (offset === 0) return 'On the day';
     if (offset === 1) return '1 day before';
     return `${offset} days before`;
+  }
+
+  /** Returns the natural sending-day name for a given service + offset so the
+   *  hint shown in the form makes sense to the user. */
+  function getSendDayHint(serviceType: string, offset: number): string {
+    // anchor days: Sabbath=Saturday(6), Midweek=Wednesday(3), Bible Study=Sunday(0)
+    const anchors: Record<string, number> = {
+      sabbath_service: 6,
+      midweek_service: 3,
+      sunday_bible_study: 0,
+    };
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const anchor = anchors[serviceType] ?? 6;
+    const sendDay = ((anchor - offset) % 7 + 7) % 7;
+    return days[sendDay];
   }
 
   return (
@@ -272,8 +297,9 @@ export function RecurringServiceReminders() {
             label="Service Type"
             {...register('service_type')}
             options={[
-              { value: 'sabbath_service', label: 'Sabbath Service (Saturday)' },
-              { value: 'midweek_service', label: 'Midweek Prayer (Wednesday)' },
+              { value: 'sabbath_service',    label: 'Sabbath Service (Saturday)' },
+              { value: 'midweek_service',    label: 'Midweek Prayer (Wednesday)' },
+              { value: 'sunday_bible_study', label: 'Sunday Bible Study (Sunday)' },
             ]}
           />
 
@@ -318,10 +344,11 @@ export function RecurringServiceReminders() {
           </label>
 
           <div className="rounded-lg bg-secondary-50 p-3 text-sm text-slate-600">
-            <p className="font-medium">Example:</p>
+            <p className="font-medium">How it works:</p>
             <p className="mt-1 text-xs">
-              If you select "1 day before" at "18:00" for Sabbath Service, the SMS will be sent
-              every Friday at 6:00 PM to all active members.
+              With the current settings, this SMS will be sent every{' '}
+              <strong>{getSendDayHint(watchedServiceType, Number(watchedOffset))}</strong> at the
+              chosen time to all active members.
             </p>
           </div>
 

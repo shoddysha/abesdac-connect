@@ -10,6 +10,7 @@ export type AttendanceType = 'sabbath_service' | 'midweek_service' | 'event';
 export type EventStatus = 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
 export type SmsStatus = 'pending' | 'sent' | 'failed' | 'cancelled';
 export type SmsType = 'event_notification' | 'event_reminder' | 'announcement' | 'manual';
+export type VisitType = 'sabbath_service' | 'midweek_service' | 'event';
 
 export interface Profile {
   id: string;
@@ -167,11 +168,25 @@ export interface ScheduledSms {
 
 export interface RecurringServiceReminder {
   id: string;
-  service_type: 'sabbath_service' | 'midweek_service';
+  service_type: 'sabbath_service' | 'midweek_service' | 'sunday_bible_study';
   message: string;
   send_time: string;
   send_day_offset: number;
   is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Visitor {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone_number: string | null;
+  email: string | null;
+  visit_date: string;
+  visit_type: VisitType;
+  followed_up: boolean;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }

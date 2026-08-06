@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Users, UserCheck, CalendarDays, Activity, UserPlus, ClipboardCheck, Megaphone, Cake } from 'lucide-react';
+import { Users, UserCheck, CalendarDays, Activity, UserPlus, ClipboardCheck, Megaphone, Cake, UserPlus2 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { StatCard } from '@/components/ui/StatCard';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -11,6 +11,7 @@ import { fetchMemberStats } from '@/services/members';
 import { fetchEvents } from '@/services/events';
 import { fetchAuditLogs } from '@/services/audit';
 import { fetchUpcomingBirthdays } from '@/services/birthdays';
+import { fetchUnfollowedVisitors } from '@/services/visitors';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { format, isFuture, formatDistanceToNow } from 'date-fns';
 
@@ -21,15 +22,18 @@ export function Dashboard() {
   const eventsQuery = useQuery({ queryKey: ['events'], queryFn: fetchEvents });
   const logsQuery = useQuery({ queryKey: ['audit-logs', 'recent'], queryFn: () => fetchAuditLogs(8) });
   const birthdaysQuery = useQuery({ queryKey: ['upcoming-birthdays'], queryFn: fetchUpcomingBirthdays });
+  const visitorsQuery = useQuery({ queryKey: ['unfollowed-visitors'], queryFn: fetchUnfollowedVisitors });
 
   useRealtimeQuery('members', ['member-stats']);
   useRealtimeQuery('members', ['upcoming-birthdays']);
   useRealtimeQuery('events', ['events']);
   useRealtimeQuery('audit_logs', ['audit-logs', 'recent']);
+  useRealtimeQuery('visitors', ['unfollowed-visitors']);
 
   const stats = statsQuery.data;
   const upcomingEvents = (eventsQuery.data ?? []).filter((e) => isFuture(new Date(e.start_time))).slice(0, 5);
   const upcomingBirthdays = (birthdaysQuery.data ?? []).slice(0, 7);
+  const unfollowedVisitors = (visitorsQuery.data ?? []).slice(0, 5);
 
   const genderData = stats
     ? [
@@ -125,8 +129,10 @@ export function Dashboard() {
           <CardHeader title="Upcoming birthdays" action={<Cake className="h-4 w-4 text-slate-400" />} />
           {birthdaysQuery.isLoading ? (
             <Spinner />
+          ) : birthdaysQuery.error ? (
+            <EmptyState icon={Cake} title="Unable to load birthdays" description="Check that members have birth dates entered." />
           ) : upcomingBirthdays.length === 0 ? (
-            <EmptyState icon={Cake} title="No birthdays soon" />
+            <EmptyState icon={Cake} title="No birthdays soon" description="No member birthdays in the next 30 days." />
           ) : (
             <div className="space-y-2">
               {upcomingBirthdays.map((member) => (
@@ -180,6 +186,52 @@ export function Dashboard() {
               </Button>
             </Link>
           </div>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader 
+            title="First-time visitors" 
+            action={
+              <div className="flex items-center gap-2">
+                {unfollowedVisitors.length > 0 && (
+                  <Badge tone="amber">{unfollowedVisitors.length} need follow-up</Badge>
+                )}
+                <UserPlus2 className="h-4 w-4 text-slate-400" />
+              </div>
+            } 
+          />
+          {visitorsQuery.isLoading ? (
+            <Spinner />
+          ) : unfollowedVisitors.length === 0 ? (
+            <EmptyState 
+              icon={UserPlus2} 
+              title="All caught up!" 
+              description="No visitors waiting for follow-up. Visitor tracking coming soon." 
+            />
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-slate-500 mb-3">
+                These visitors need follow-up contact from pastoral team
+              </p>
+              {unfollowedVisitors.map((visitor) => (
+                <div
+                  key={visitor.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink">
+                      {visitor.first_name} {visitor.last_name}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Visited {format(new Date(visitor.visit_date), 'MMM d, yyyy')}
+                      {visitor.phone_number && ` · ${visitor.phone_number}`}
+                    </p>
+                  </div>
+                  <Badge tone="amber">Pending</Badge>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
     </div>

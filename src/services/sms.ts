@@ -376,8 +376,25 @@ export async function fetchSmsRecipients(logId: string): Promise<SmsRecipient[]>
 }
 
 /**
- * Get SMS statistics
+ * Delete a failed SMS log and all its recipient records.
+ * Recipients are deleted first to avoid FK violations on databases
+ * where ON DELETE CASCADE was not set.
  */
+export async function deleteSmsLog(logId: string): Promise<void> {
+  // 1. Delete recipients first (safe even if CASCADE already exists)
+  const { error: recipientsError } = await supabase
+    .from('sms_recipients')
+    .delete()
+    .eq('sms_log_id', logId);
+  if (recipientsError) throw recipientsError;
+
+  // 2. Delete the log itself
+  const { error: logError } = await supabase
+    .from('sms_logs')
+    .delete()
+    .eq('id', logId);
+  if (logError) throw logError;
+}
 export async function fetchSmsStats(): Promise<{
   total: number;
   sent: number;

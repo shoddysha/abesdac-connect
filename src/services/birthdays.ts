@@ -20,6 +20,7 @@ export async function fetchUpcomingBirthdays(): Promise<BirthdayMember[]> {
   if (error) throw error;
 
   const today = new Date();
+  today.setHours(0, 0, 0, 0); // Reset to start of day
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth();
   const currentDay = today.getDate();
@@ -29,21 +30,23 @@ export async function fetchUpcomingBirthdays(): Promise<BirthdayMember[]> {
       if (!member.date_of_birth) return null;
 
       const dob = new Date(member.date_of_birth);
-      const birthdayThisYear = new Date(currentYear, dob.getMonth(), dob.getDate());
-      
-      // If birthday already passed this year, check next year
+      if (isNaN(dob.getTime())) return null;
+
+      // Use only month/day — works for both full and partial (year=1900) dates
+      let birthdayThisYear = new Date(currentYear, dob.getMonth(), dob.getDate());
+      birthdayThisYear.setHours(0, 0, 0, 0);
+
+      // If birthday already passed this year, use next year
       if (birthdayThisYear < today) {
-        birthdayThisYear.setFullYear(currentYear + 1);
+        birthdayThisYear = new Date(currentYear + 1, dob.getMonth(), dob.getDate());
       }
 
-      const daysUntil = Math.ceil((birthdayThisYear.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const daysUntil = Math.ceil(
+        (birthdayThisYear.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+      );
       const isToday = dob.getMonth() === currentMonth && dob.getDate() === currentDay;
 
-      return {
-        ...member,
-        days_until: daysUntil,
-        is_today: isToday,
-      } as BirthdayMember;
+      return { ...member, days_until: daysUntil, is_today: isToday } as BirthdayMember;
     })
     .filter((m): m is BirthdayMember => m !== null && m.days_until <= 30)
     .sort((a, b) => a.days_until - b.days_until);

@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState, type ChangeEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { KeyRound, User, Database, Bell, Clock, Shield } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -32,11 +33,32 @@ type PasswordValues = z.infer<typeof passwordSchema>;
 export function Settings() {
   const { profile, hasRole, updatePassword, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url ?? null);
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
+  
+  // Notification settings state (load from localStorage)
+  const [birthdaySmsEnabled, setBirthdaySmsEnabled] = useState(() => {
+    const saved = localStorage.getItem('notif_birthday_sms');
+    return saved ? saved === 'true' : true;
+  });
+  const [eventRemindersEnabled, setEventRemindersEnabled] = useState(() => {
+    const saved = localStorage.getItem('notif_event_reminders');
+    return saved ? saved === 'true' : true;
+  });
+  const [weeklyReportsEnabled, setWeeklyReportsEnabled] = useState(() => {
+    const saved = localStorage.getItem('notif_weekly_reports');
+    return saved ? saved === 'true' : false;
+  });
+  
+  // Session timeout state (load from localStorage, default 15 minutes)
+  const [idleTimeout, setIdleTimeout] = useState(() => {
+    const saved = localStorage.getItem('idle_timeout_minutes');
+    return saved || '15';
+  });
 
   function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -90,6 +112,45 @@ export function Settings() {
     } finally {
       setBackupLoading(false);
     }
+  }
+
+  function handleNotificationToggle(setting: 'birthday' | 'event' | 'weekly', value: boolean) {
+    switch (setting) {
+      case 'birthday':
+        setBirthdaySmsEnabled(value);
+        localStorage.setItem('notif_birthday_sms', String(value));
+        toast.success(value ? 'Birthday SMS enabled' : 'Birthday SMS disabled');
+        break;
+      case 'event':
+        setEventRemindersEnabled(value);
+        localStorage.setItem('notif_event_reminders', String(value));
+        toast.success(value ? 'Event reminders enabled' : 'Event reminders disabled');
+        break;
+      case 'weekly':
+        setWeeklyReportsEnabled(value);
+        localStorage.setItem('notif_weekly_reports', String(value));
+        toast.success(value ? 'Weekly reports enabled' : 'Weekly reports disabled');
+        break;
+    }
+  }
+
+  function handleTimeoutUpdate() {
+    const timeout = parseInt(idleTimeout);
+    if (isNaN(timeout) || timeout < 1) {
+      toast.error('Please enter a valid timeout (minimum 1 minute)');
+      return;
+    }
+    localStorage.setItem('idle_timeout_minutes', String(timeout));
+    toast.success(`Session timeout updated to ${timeout} minutes. Changes take effect on next login.`);
+  }
+
+  function viewAuditLogs() {
+    toast.success('Audit logs are displayed in the Dashboard activity feed');
+    navigate('/');
+  }
+
+  function manageUserRoles() {
+    navigate('/users');
   }
 
   return (
@@ -167,16 +228,31 @@ export function Settings() {
             Configure automated reminders and notifications for birthdays, events, and follow-ups.
           </p>
           <div className="space-y-3">
-            <label className="flex items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" defaultChecked />
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input 
+                type="checkbox" 
+                className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
+                checked={birthdaySmsEnabled}
+                onChange={(e) => handleNotificationToggle('birthday', e.target.checked)}
+              />
               <span className="text-sm text-ink">Send birthday SMS to members automatically</span>
             </label>
-            <label className="flex items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" defaultChecked />
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input 
+                type="checkbox" 
+                className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
+                checked={eventRemindersEnabled}
+                onChange={(e) => handleNotificationToggle('event', e.target.checked)}
+              />
               <span className="text-sm text-ink">Event reminder notifications (24 hours before)</span>
             </label>
-            <label className="flex items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" />
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input 
+                type="checkbox" 
+                className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
+                checked={weeklyReportsEnabled}
+                onChange={(e) => handleNotificationToggle('weekly', e.target.checked)}
+              />
               <span className="text-sm text-ink">Weekly attendance summary reports</span>
             </label>
           </div>
@@ -189,15 +265,17 @@ export function Settings() {
           <p className="mb-4 text-sm text-slate-500">
             Automatically log out users after a period of inactivity for security.
           </p>
-          <div className="flex items-center gap-4">
-            <Input
-              type="number"
-              label="Idle timeout (minutes)"
-              defaultValue="15"
-              hint="Current setting: 15 minutes of inactivity"
-              className="max-w-xs"
-            />
-            <Button>Update</Button>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="flex-1 max-w-xs">
+              <Input
+                type="number"
+                label="Idle timeout (minutes)"
+                value={idleTimeout}
+                onChange={(e) => setIdleTimeout(e.target.value)}
+                hint="Minimum 1 minute, recommended 15 minutes"
+              />
+            </div>
+            <Button onClick={handleTimeoutUpdate}>Update timeout</Button>
           </div>
         </Card>
       )}
@@ -208,9 +286,9 @@ export function Settings() {
           <p className="mb-4 text-sm text-slate-500">
             View security logs, manage user permissions, and configure data retention policies.
           </p>
-          <div className="space-y-2">
-            <Button variant="outline">View audit logs</Button>
-            <Button variant="outline" className="ml-2">Manage user roles</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={viewAuditLogs}>View audit logs</Button>
+            <Button variant="outline" onClick={manageUserRoles}>Manage user roles</Button>
           </div>
         </Card>
       )}

@@ -12,6 +12,23 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MemberFormModal } from '@/pages/members/MemberFormModal';
 import { format } from 'date-fns';
 
+const PARTIAL_YEAR = 1900;
+
+/** Renders a date_of_birth string for display.
+ *  - Full date (e.g. "1985-03-22") → "Mar 22, 1985"
+ *  - Partial date (year=1900 sentinel, e.g. "1900-08-14") → "Aug 14 (year unknown)"
+ *  - null / empty → null (caller shows "—")
+ */
+function formatDob(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const date = new Date(raw);
+  if (isNaN(date.getTime())) return raw;
+  if (date.getFullYear() === PARTIAL_YEAR) {
+    return format(date, 'MMM d') + ' (year unknown)';
+  }
+  return format(date, 'MMM d, yyyy');
+}
+
 export function MemberProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -71,7 +88,7 @@ export function MemberProfile() {
           </InfoGroup>
 
           <InfoGroup title="Personal">
-            <InfoRow icon={Cake} label="Date of birth" value={m.date_of_birth} />
+            <InfoRow icon={Cake} label="Date of birth" value={formatDob(m.date_of_birth)} />
             <InfoRow label="Gender" value={m.gender} />
             <InfoRow label="Marital status" value={m.marital_status} />
             <InfoRow label="Occupation" value={m.occupation} />

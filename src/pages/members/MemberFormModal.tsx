@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
@@ -12,10 +12,39 @@ import { fetchMinistries } from '@/services/ministries';
 import { uploadMemberImage } from '@/services/storage';
 import { useAuth } from '@/contexts/AuthContext';
 
+/** Sentinel year stored in Postgres when the member only shared month + day.
+ *  Postgres needs a full date; we never show this year to the user. */
+const PARTIAL_YEAR = 1900;
+
+function parseDobForForm(raw: string | null | undefined) {
+  if (!raw) return { mode: 'full' as const, fullDate: '', dobMonth: '', dobDay: '' };
+  if (raw.startsWith(`${PARTIAL_YEAR}-`)) {
+    const [, mm, dd] = raw.split('-');
+    return { mode: 'partial' as const, fullDate: '', dobMonth: mm, dobDay: dd };
+  }
+  return { mode: 'full' as const, fullDate: raw, dobMonth: '', dobDay: '' };
+}
+
+function buildDobValue(
+  mode: 'full' | 'partial',
+  fullDate: string,
+  dobMonth: string,
+  dobDay: string,
+): string | null {
+  if (mode === 'full') return fullDate.trim() || null;
+  const mm = dobMonth.padStart(2, '0');
+  const dd = dobDay.padStart(2, '0');
+  if (!mm || !dd) return null;
+  return `${PARTIAL_YEAR}-${mm}-${dd}`;
+}
+
 const schema = z.object({
   first_name: z.string().min(1, 'Required'),
   last_name: z.string().min(1, 'Required'),
-  date_of_birth: z.string().optional(),
+  dob_mode: z.enum(['full', 'partial']),
+  date_of_birth: z.string().optional(),   // full date input
+  dob_month: z.string().optional(),       // partial: month
+  dob_day: z.string().optional(),         // partial: day
   gender: z.enum(['male', 'female']).optional(),
   marital_status: z.enum(['single', 'married', 'divorced', 'widowed']).optional(),
   occupation: z.string().optional(),
@@ -40,16 +69,28 @@ type FormValues = z.infer<typeof schema>;
 const defaultValues: FormValues = {
   first_name: '',
   last_name: '',
+  dob_mode: 'full',
   date_joined: new Date().toISOString().slice(0, 10),
   status: 'active',
 };
 
-// HTML date inputs report blank as "" (sometimes just whitespace), but
-// Postgres `date` columns only accept a real date or NULL — never "".
 function toNullableDate(value: string | undefined | null) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
 }
+
+const MONTHS = [
+  { value: '01', label: 'January' }, { value: '02', label: 'February' },
+  { value: '03', label: 'March' },   { value: '04', label: 'April' },
+  { value: '05', label: 'May' },     { value: '06', label: 'June' },
+  { value: '07', label: 'July' },    { value: '08', label: 'August' },
+  { value: '09', label: 'September' },{ value: '10', label: 'October' },
+  { value: '11', label: 'November' }, { value: '12', label: 'December' },
+];
+const DAYS = Array.from({ length: 31 }, (_, i) => ({
+  value: String(i + 1).padStart(2, '0'),
+  label: String(i + 1),
+}));
 
 export function MemberFormModal({
   open,
@@ -78,16 +119,24 @@ export function MemberFormModal({
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues });
+
+  // Reactively show the correct DOB inputs
+  const dobMode = useWatch({ control, name: 'dob_mode' });
 
   useEffect(() => {
     if (open && memberQuery.data) {
       const m = memberQuery.data;
+      const { mode, fullDate, dobMonth, dobDay } = parseDobForForm(m.date_of_birth);
       reset({
         first_name: m.first_name,
         last_name: m.last_name,
-        date_of_birth: m.date_of_birth ?? '',
+        dob_mode: mode,
+        date_of_birth: fullDate,
+        dob_month: dobMonth,
+        dob_day: dobDay,
         gender: m.gender ?? undefined,
         marital_status: m.marital_status ?? undefined,
         occupation: m.occupation ?? '',
@@ -131,10 +180,19 @@ export function MemberFormModal({
     try {
       let profile_image_url = imagePreview && !imageFile ? imagePreview : undefined;
 
-      // Sanitize once, use for both the create and update paths below.
+      const finalDob = buildDobValue(
+        values.dob_mode,
+        values.date_of_birth ?? '',
+        values.dob_month ?? '',
+        values.dob_day ?? '',
+      );
+
+      // Strip virtual DOB fields before sending to DB
+      const { dob_mode, dob_month, dob_day, date_of_birth: _raw, ...rest } = values;
+
       const sanitized = {
-        ...values,
-        date_of_birth: toNullableDate(values.date_of_birth),
+        ...rest,
+        date_of_birth: finalDob,
         baptism_date: toNullableDate(values.baptism_date),
         date_joined: toNullableDate(values.date_joined) ?? new Date().toISOString().slice(0, 10),
         ministry_id: values.ministry_id || null,
@@ -190,7 +248,44 @@ export function MemberFormModal({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Input label="First name" {...register('first_name')} error={errors.first_name?.message} />
             <Input label="Last name" {...register('last_name')} error={errors.last_name?.message} />
-            <Input label="Date of birth" type="date" {...register('date_of_birth')} />
+
+            {/* ── Date of birth ── */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-ink">Date of birth</span>
+              <div className="flex gap-4 text-sm">
+                <label className="flex cursor-pointer items-center gap-1.5">
+                  <input type="radio" value="full" {...register('dob_mode')} className="accent-secondary" />
+                  Full date
+                </label>
+                <label className="flex cursor-pointer items-center gap-1.5">
+                  <input type="radio" value="partial" {...register('dob_mode')} className="accent-secondary" />
+                  Day &amp; month only
+                </label>
+              </div>
+              {dobMode === 'full' ? (
+                <Input type="date" {...register('date_of_birth')} hint="Leave blank if unknown" />
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Select
+                        placeholder="Month"
+                        options={[{ value: '', label: 'Month' }, ...MONTHS]}
+                        {...register('dob_month')}
+                      />
+                    </div>
+                    <div className="w-28">
+                      <Select
+                        placeholder="Day"
+                        options={[{ value: '', label: 'Day' }, ...DAYS]}
+                        {...register('dob_day')}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500">Birth year not recorded — used for birthday reminders only.</p>
+                </>
+              )}
+            </div>
             <Select
               label="Gender"
               placeholder="Select gender"
