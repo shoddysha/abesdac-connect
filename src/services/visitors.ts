@@ -64,6 +64,11 @@ export async function updateVisitor(id: string, updates: Partial<Visitor>): Prom
   if (error) throw error;
 }
 
+export async function deleteVisitor(id: string): Promise<void> {
+  const { error } = await supabase.from('visitors').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function markAsFollowedUp(id: string): Promise<void> {
   await updateVisitor(id, { followed_up: true });
 }

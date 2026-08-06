@@ -11,6 +11,7 @@ export type EventStatus = 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
 export type SmsStatus = 'pending' | 'sent' | 'failed' | 'cancelled';
 export type SmsType = 'event_notification' | 'event_reminder' | 'announcement' | 'manual';
 export type VisitType = 'sabbath_service' | 'midweek_service' | 'event';
+export type PrayerStatus = 'open' | 'ongoing' | 'answered';
 
 export interface Profile {
   id: string;

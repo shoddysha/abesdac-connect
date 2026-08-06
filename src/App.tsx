@@ -15,6 +15,8 @@ import { Attendance } from '@/pages/Attendance';
 import { Events } from '@/pages/Events';
 import { Reports } from '@/pages/Reports';
 import { Announcements } from '@/pages/Announcements';
+import { Visitors } from '@/pages/Visitors';
+import { PrayerRequests } from '@/pages/PrayerRequests';
 import { Sms } from '@/pages/Sms';
 import { Users } from '@/pages/Users';
 import { Settings } from '@/pages/Settings';
@@ -51,6 +53,13 @@ export function App() {
               }
             />
             <Route path="/announcements" element={<Announcements />} />
+            <Route path="/visitors" element={
+                <ProtectedRoute roles={['administrator', 'secretary']}>
+                  <Visitors />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/prayer-requests" element={<PrayerRequests />} />
             <Route
               path="/sms"
               element={

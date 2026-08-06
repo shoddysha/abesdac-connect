@@ -63,7 +63,9 @@ export function SmsLogsViewer() {
       if (expandedLogId === logId) setExpandedLogId(null);
 
       toast.success('SMS log deleted');
-      queryClient.invalidateQueries({ queryKey: ['sms-logs'] });
+      
+      // Force refetch to update the UI immediately
+      await queryClient.refetchQueries({ queryKey: ['sms-logs'] });
     } catch (err) {
       toast.error((err as Error).message || 'Failed to delete SMS log');
     } finally {
