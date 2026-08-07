@@ -218,7 +218,7 @@ export function Dashboard() {
           </div>
         </Card>
 
-        <Card className="lg:col-span-1">
+        <Card className="lg:col-span-2">
           <CardHeader title="Gender distribution" />
           {stats && stats.total > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
@@ -233,41 +233,6 @@ export function Dashboard() {
             </ResponsiveContainer>
           ) : (
             <p className="py-10 text-center text-sm text-slate-400">No member data yet</p>
-          )}
-        </Card>
-
-        <Card>
-          <CardHeader title="Upcoming birthdays" action={<Cake className="h-4 w-4 text-slate-400" />} />
-          {birthdaysQuery.isLoading ? (
-            <Spinner />
-          ) : birthdaysQuery.error ? (
-            <EmptyState icon={Cake} title="Unable to load birthdays" description="Check that members have birth dates entered." />
-          ) : upcomingBirthdays.length === 0 ? (
-            <EmptyState icon={Cake} title="No birthdays soon" description="No member birthdays in the next 30 days." />
-          ) : (
-            <div className="space-y-2">
-              {upcomingBirthdays.map((member) => (
-                <Link
-                  key={member.id}
-                  to={`/members/${member.id}`}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">
-                      {member.first_name} {member.last_name}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {format(new Date(member.date_of_birth!), 'MMM d')}
-                    </p>
-                  </div>
-                  {member.is_today ? (
-                    <Badge tone="amber">Today!</Badge>
-                  ) : (
-                    <span className="text-xs text-slate-400">{member.days_until}d</span>
-                  )}
-                </Link>
-              ))}
-            </div>
           )}
         </Card>
       </div>
