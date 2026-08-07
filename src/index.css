@@ -11,11 +11,28 @@ body,
 body {
   @apply bg-surface text-ink antialiased;
   font-family: 'Inter', system-ui, sans-serif;
+  /* Improve mobile scrolling */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* Prevent any table from forcing horizontal page scroll */
 .table-scroll {
   @apply w-full overflow-x-auto rounded-xl border border-slate-200 bg-card;
+}
+
+/* Improve touch scrolling on all scrollable elements */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Smooth scrolling for mobile */
+@media (max-width: 1024px) {
+  .overflow-y-auto,
+  .overflow-x-auto,
+  .overflow-auto {
+    overscroll-behavior: contain;
+  }
 }
 
 ::-webkit-scrollbar {

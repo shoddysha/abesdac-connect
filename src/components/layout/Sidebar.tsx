@@ -56,7 +56,7 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
           <p className="text-[11px] leading-tight text-white/60">Abeka SDA Church</p>
         </div>
       </div>
-      <nav className="flex-1 overflow-y-auto p-3">
+      <nav className="flex-1 overflow-y-auto p-3 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="flex flex-col gap-1">
           {navItems
             .filter((item) => !item.roles || (profile && item.roles.includes(profile.role)))

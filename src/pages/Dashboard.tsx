@@ -61,25 +61,55 @@ export function Dashboard() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <CardHeader title="Gender distribution" />
-          {stats && stats.total > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={genderData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80} paddingAngle={2}>
-                  {genderData.map((_, i) => (
-                    <Cell key={i} fill={GENDER_COLORS[i]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+        <Card className="lg:col-span-2">
+          <CardHeader 
+            title="First-time visitors" 
+            action={
+              <div className="flex items-center gap-2">
+                {unfollowedVisitors.length > 0 && (
+                  <Badge tone="amber">{unfollowedVisitors.length} need follow-up</Badge>
+                )}
+                <Link to="/visitors" className="text-sm font-medium text-secondary hover:underline">
+                  View all
+                </Link>
+              </div>
+            } 
+          />
+          {visitorsQuery.isLoading ? (
+            <Spinner />
+          ) : unfollowedVisitors.length === 0 ? (
+            <EmptyState 
+              icon={UserPlus2} 
+              title="All caught up!" 
+              description="No visitors waiting for follow-up." 
+            />
           ) : (
-            <p className="py-10 text-center text-sm text-slate-400">No member data yet</p>
+            <div className="space-y-2">
+              <p className="text-sm text-slate-500 mb-3">
+                These visitors need follow-up contact from pastoral team
+              </p>
+              {unfollowedVisitors.map((visitor) => (
+                <div
+                  key={visitor.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink">
+                      {visitor.first_name} {visitor.last_name}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Visited {format(new Date(visitor.visit_date), 'MMM d, yyyy')}
+                      {visitor.phone_number && ` · ${visitor.phone_number}`}
+                    </p>
+                  </div>
+                  <Badge tone="amber">Pending</Badge>
+                </div>
+              ))}
+            </div>
           )}
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-1">
           <CardHeader title="Upcoming events" action={<Link to="/events" className="text-sm font-medium text-secondary hover:underline">View all</Link>} />
           {upcomingEvents.length === 0 ? (
             <EmptyState icon={CalendarDays} title="No upcoming events" description="Create one from the Events page." />
@@ -188,47 +218,54 @@ export function Dashboard() {
           </div>
         </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader 
-            title="First-time visitors" 
-            action={
-              <div className="flex items-center gap-2">
-                {unfollowedVisitors.length > 0 && (
-                  <Badge tone="amber">{unfollowedVisitors.length} need follow-up</Badge>
-                )}
-                <UserPlus2 className="h-4 w-4 text-slate-400" />
-              </div>
-            } 
-          />
-          {visitorsQuery.isLoading ? (
+        <Card className="lg:col-span-1">
+          <CardHeader title="Gender distribution" />
+          {stats && stats.total > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={genderData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80} paddingAngle={2}>
+                  {genderData.map((_, i) => (
+                    <Cell key={i} fill={GENDER_COLORS[i]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="py-10 text-center text-sm text-slate-400">No member data yet</p>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader title="Upcoming birthdays" action={<Cake className="h-4 w-4 text-slate-400" />} />
+          {birthdaysQuery.isLoading ? (
             <Spinner />
-          ) : unfollowedVisitors.length === 0 ? (
-            <EmptyState 
-              icon={UserPlus2} 
-              title="All caught up!" 
-              description="No visitors waiting for follow-up. Visitor tracking coming soon." 
-            />
+          ) : birthdaysQuery.error ? (
+            <EmptyState icon={Cake} title="Unable to load birthdays" description="Check that members have birth dates entered." />
+          ) : upcomingBirthdays.length === 0 ? (
+            <EmptyState icon={Cake} title="No birthdays soon" description="No member birthdays in the next 30 days." />
           ) : (
             <div className="space-y-2">
-              <p className="text-sm text-slate-500 mb-3">
-                These visitors need follow-up contact from pastoral team
-              </p>
-              {unfollowedVisitors.map((visitor) => (
-                <div
-                  key={visitor.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50"
+              {upcomingBirthdays.map((member) => (
+                <Link
+                  key={member.id}
+                  to={`/members/${member.id}`}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink">
-                      {visitor.first_name} {visitor.last_name}
+                      {member.first_name} {member.last_name}
                     </p>
                     <p className="text-xs text-slate-500">
-                      Visited {format(new Date(visitor.visit_date), 'MMM d, yyyy')}
-                      {visitor.phone_number && ` · ${visitor.phone_number}`}
+                      {format(new Date(member.date_of_birth!), 'MMM d')}
                     </p>
                   </div>
-                  <Badge tone="amber">Pending</Badge>
-                </div>
+                  {member.is_today ? (
+                    <Badge tone="amber">Today!</Badge>
+                  ) : (
+                    <span className="text-xs text-slate-400">{member.days_until}d</span>
+                  )}
+                </Link>
               ))}
             </div>
           )}
