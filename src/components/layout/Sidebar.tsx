@@ -45,7 +45,7 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
   return (
     <aside
       className={cn(
-        'fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-primary text-white transition-transform lg:static lg:translate-x-0',
+        'fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-primary text-white transition-transform duration-300 lg:static lg:translate-x-0',
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       )}
     >
@@ -56,7 +56,7 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
           <p className="text-[11px] leading-tight text-white/60">Abeka SDA Church</p>
         </div>
       </div>
-      <nav className="flex-1 overflow-y-auto p-3 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <nav className="flex-1 overflow-y-auto p-3">
         <div className="flex flex-col gap-1">
           {navItems
             .filter((item) => !item.roles || (profile && item.roles.includes(profile.role)))
