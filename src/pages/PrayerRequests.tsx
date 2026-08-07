@@ -99,14 +99,14 @@ export function PrayerRequests() {
               <RefreshCw className="h-4 w-4" /> Sync Now
             </Button>
           )}
-          <Button
-            as="a"
+          <a
             href="https://forms.google.com/your-form-url"
             target="_blank"
             rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
           >
             <ExternalLink className="h-4 w-4" /> Open Prayer Form
-          </Button>
+          </a>
         </div>
       </div>
 
