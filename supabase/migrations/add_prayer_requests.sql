@@ -16,21 +16,25 @@ END $$;
 -- 2. Table
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.prayer_requests (
-  id               UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-  member_id        UUID        REFERENCES public.members(id) ON DELETE SET NULL,
-  requested_by     TEXT        NOT NULL, -- Name (for non-members or anonymous)
-  request_text     TEXT        NOT NULL,
-  status           prayer_status NOT NULL DEFAULT 'open',
-  is_anonymous     BOOLEAN     NOT NULL DEFAULT FALSE,
-  answered_at      TIMESTAMPTZ,
-  answer_notes     TEXT,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_by       UUID        REFERENCES public.profiles(id)
+  id                    UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  member_id             UUID        REFERENCES public.members(id) ON DELETE SET NULL,
+  requested_by          TEXT        NOT NULL, -- Name (for non-members or anonymous)
+  request_text          TEXT        NOT NULL,
+  status                prayer_status NOT NULL DEFAULT 'open',
+  is_anonymous          BOOLEAN     NOT NULL DEFAULT FALSE,
+  answered_at           TIMESTAMPTZ,
+  answer_notes          TEXT,
+  google_form_timestamp TEXT,       -- Timestamp from Google Form submission (for deduplication)
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by            UUID        REFERENCES public.profiles(id)
 );
 
 COMMENT ON TABLE public.prayer_requests IS
   'Tracks prayer requests from members and visitors for intercessory prayer ministry.';
+
+COMMENT ON COLUMN public.prayer_requests.google_form_timestamp IS
+  'Timestamp from Google Form submission to prevent duplicate imports.';
 
 -- ---------------------------------------------------------------------
 -- 3. Indexes
@@ -44,6 +48,10 @@ CREATE INDEX IF NOT EXISTS idx_prayer_requests_member
 
 CREATE INDEX IF NOT EXISTS idx_prayer_requests_created
   ON public.prayer_requests (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_prayer_requests_google_timestamp
+  ON public.prayer_requests (google_form_timestamp)
+  WHERE google_form_timestamp IS NOT NULL;
 
 -- ---------------------------------------------------------------------
 -- 4. updated_at trigger

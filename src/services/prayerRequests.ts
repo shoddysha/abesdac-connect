@@ -14,6 +14,7 @@ export interface PrayerRequest {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  google_form_timestamp: string | null; // Track when it was submitted via Google Form
 }
 
 export interface CreatePrayerRequestInput {
@@ -22,6 +23,7 @@ export interface CreatePrayerRequestInput {
   request_text: string;
   is_anonymous?: boolean;
   created_by?: string | null;
+  google_form_timestamp?: string | null;
 }
 
 export interface UpdatePrayerRequestInput {
@@ -61,6 +63,7 @@ export async function createPrayerRequest(input: CreatePrayerRequestInput): Prom
       request_text: input.request_text,
       is_anonymous: input.is_anonymous ?? false,
       created_by: input.created_by ?? null,
+      google_form_timestamp: input.google_form_timestamp ?? null,
       status: 'open',
     })
     .select()
@@ -102,4 +105,18 @@ export async function getOpenPrayerRequestsCount(): Promise<number> {
 
   if (error) throw error;
   return count ?? 0;
+}
+
+/**
+ * Sync prayer requests from Google Sheets (connected to Google Form responses)
+ * Returns the number of new requests imported
+ */
+export async function syncGoogleFormResponses(): Promise<number> {
+  // Call the Edge Function that fetches from Google Sheets and imports new rows
+  const { data, error } = await supabase.functions.invoke('sync-prayer-requests', {
+    method: 'POST',
+  });
+
+  if (error) throw error;
+  return data?.newCount ?? 0;
 }

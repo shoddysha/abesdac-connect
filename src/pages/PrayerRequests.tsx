@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { HandHeart, Search, Plus, Check, Clock, Sparkles, Trash2 } from 'lucide-react';
+import { HandHeart, Search, Check, Clock, Sparkles, Trash2, ExternalLink, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -10,11 +10,11 @@ import {
   fetchPrayerRequests,
   updatePrayerRequest,
   deletePrayerRequest,
+  syncGoogleFormResponses,
   type PrayerStatus,
 } from '@/services/prayerRequests';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
-import { PrayerRequestFormModal } from '@/features/prayer/PrayerRequestFormModal';
 import { PrayerAnswerModal } from '@/features/prayer/PrayerAnswerModal';
 import toast from 'react-hot-toast';
 
@@ -25,8 +25,8 @@ export function PrayerRequests() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<PrayerStatus | 'all'>('all');
-  const [formOpen, setFormOpen] = useState(false);
   const [answeringRequest, setAnsweringRequest] = useState<any>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const requestsQuery = useQuery({
     queryKey: ['prayer-requests'],
@@ -67,22 +67,51 @@ export function PrayerRequests() {
     }
   }
 
+  async function handleSyncGoogleForms() {
+    setSyncing(true);
+    try {
+      const newCount = await syncGoogleFormResponses();
+      queryClient.invalidateQueries({ queryKey: ['prayer-requests'] });
+      if (newCount > 0) {
+        toast.success(`Synced ${newCount} new prayer request${newCount > 1 ? 's' : ''}`);
+      } else {
+        toast.success('No new prayer requests found');
+      }
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to sync prayer requests');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Prayer Requests</h1>
           <p className="text-sm text-slate-500">
-            Submit and track prayer requests for intercessory prayer ministry.
+            Prayer requests automatically synced from Google Forms submissions.
           </p>
         </div>
-        <Button onClick={() => setFormOpen(true)}>
-          <Plus className="h-4 w-4" /> New Prayer Request
-        </Button>
+        <div className="flex gap-2">
+          {canManage && (
+            <Button variant="outline" onClick={handleSyncGoogleForms} isLoading={syncing}>
+              <RefreshCw className="h-4 w-4" /> Sync Now
+            </Button>
+          )}
+          <Button
+            as="a"
+            href="https://forms.google.com/your-form-url"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ExternalLink className="h-4 w-4" /> Open Prayer Form
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter('open')}>
+        <Card className="hover:shadow-md transition-shadow" onClick={() => setStatusFilter('open')}>
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-100 p-2.5">
               <Clock className="h-5 w-5 text-blue-600" />
@@ -93,7 +122,7 @@ export function PrayerRequests() {
             </div>
           </div>
         </Card>
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter('ongoing')}>
+        <Card className="hover:shadow-md transition-shadow" onClick={() => setStatusFilter('ongoing')}>
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-amber-100 p-2.5">
               <HandHeart className="h-5 w-5 text-amber-600" />
@@ -104,7 +133,7 @@ export function PrayerRequests() {
             </div>
           </div>
         </Card>
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter('answered')}>
+        <Card className="hover:shadow-md transition-shadow" onClick={() => setStatusFilter('answered')}>
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-100 p-2.5">
               <Check className="h-5 w-5 text-green-600" />
@@ -165,7 +194,7 @@ export function PrayerRequests() {
         <EmptyState
           icon={HandHeart}
           title={search ? 'No requests found' : 'No prayer requests yet'}
-          description={search ? 'Try a different search term' : 'Submit your first prayer request'}
+          description={search ? 'Try a different search term' : 'Share the Google Form link with church members to receive prayer requests'}
         />
       ) : (
         <div className="space-y-3">
@@ -248,15 +277,6 @@ export function PrayerRequests() {
           ))}
         </div>
       )}
-
-      <PrayerRequestFormModal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        onSaved={() => {
-          setFormOpen(false);
-          queryClient.invalidateQueries({ queryKey: ['prayer-requests'] });
-        }}
-      />
 
       {answeringRequest && (
         <PrayerAnswerModal

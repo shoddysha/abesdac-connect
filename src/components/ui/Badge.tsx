@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/utils/cn';
 
-type Tone = 'green' | 'red' | 'amber' | 'blue' | 'slate';
+type Tone = 'green' | 'red' | 'amber' | 'blue' | 'slate' | 'purple';
 
 const toneClasses: Record<Tone, string> = {
   green: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -9,6 +9,7 @@ const toneClasses: Record<Tone, string> = {
   amber: 'bg-amber-50 text-amber-700 ring-amber-200',
   blue: 'bg-secondary-50 text-secondary-700 ring-blue-200',
   slate: 'bg-slate-100 text-slate-700 ring-slate-200',
+  purple: 'bg-purple-50 text-purple-700 ring-purple-200',
 };
 
 export function Badge({ children, tone = 'slate' }: { children: ReactNode; tone?: Tone }) {
