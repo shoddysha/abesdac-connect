@@ -167,30 +167,28 @@ export function Reports() {
       {/* Summary Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Total Members"
+          label="Total Members"
           value={members.length.toString()}
           icon={Users}
-          tone="blue"
+          tone="primary"
         />
         <StatCard
-          title="Visitors This Month"
+          label="Visitors This Month"
           value={visitorsThisMonth.toString()}
-          subtitle={`${visitorsNotFollowedUp} need follow-up`}
           icon={UserPlus}
-          tone="green"
+          tone="secondary"
         />
         <StatCard
-          title="Open Prayer Requests"
+          label="Open Prayer Requests"
           value={openPrayerRequests.toString()}
-          subtitle={`${answeredPrayerRequests} answered`}
           icon={HandHeart}
-          tone="purple"
+          tone="accent"
         />
         <StatCard
-          title="Active Ministries"
+          label="Active Ministries"
           value={(ministriesQuery.data ?? []).filter((m) => m.is_active).length.toString()}
           icon={TrendingUp}
-          tone="amber"
+          tone="primary"
         />
       </div>
 
