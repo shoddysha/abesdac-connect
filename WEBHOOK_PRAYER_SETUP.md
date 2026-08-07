@@ -86,46 +86,7 @@ Delete any existing code and paste:
 // ========================================
 // CONFIGURATION - UPDATE THIS URL
 // ========================================
-const WEBHOOK_URL = 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/receive-prayer-request';
 
-// ========================================
-// AUTO-SUBMIT TO WEBHOOK
-// ========================================
-function onFormSubmit(e) {
-  try {
-    const responses = e.response.getItemResponses();
-    
-    // Extract answers (order matches your form questions)
-    const name = responses[0]?.getResponse() || '';
-    const prayerRequest = responses[1]?.getResponse() || '';
-    const anonymous = responses[2]?.getResponse() || 'No';
-    
-    // Prepare data to send
-    const payload = {
-      name: name,
-      prayer_request: prayerRequest,
-      anonymous: anonymous,
-      timestamp: new Date().toISOString()
-    };
-    
-    // Send to webhook
-    const options = {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    };
-    
-    const response = UrlFetchApp.fetch(WEBHOOK_URL, options);
-    const result = JSON.parse(response.getContentText());
-    
-    Logger.log('✅ Webhook response: ' + JSON.stringify(result));
-    
-  } catch (error) {
-    Logger.log('❌ Error: ' + error.toString());
-    // Don't throw - we don't want form submission to fail
-  }
-}
 ```
 
 ### 3.3 Update the Webhook URL

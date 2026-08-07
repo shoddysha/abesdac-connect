@@ -75,7 +75,7 @@ export function PrayerRequests() {
           </p>
         </div>
         <a
-          href="https://forms.google.com/your-form-url"
+          href="https://forms.gle/vGcmXx1U3jYhMT148"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
