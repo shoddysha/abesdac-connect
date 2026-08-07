@@ -80,7 +80,7 @@ export function SmsLogsViewer() {
         action={<MessageSquare className="h-4 w-4 text-slate-400" />}
       />
       <p className="-mt-2 mb-4 text-sm text-slate-500">
-        View all sent SMS messages and their delivery status. Failed messages can be deleted.
+        Showing latest 5 SMS messages. Failed messages can be deleted.
       </p>
 
       {isLoading ? (

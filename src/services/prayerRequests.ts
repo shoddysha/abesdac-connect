@@ -106,17 +106,3 @@ export async function getOpenPrayerRequestsCount(): Promise<number> {
   if (error) throw error;
   return count ?? 0;
 }
-
-/**
- * Sync prayer requests from Google Sheets (connected to Google Form responses)
- * Returns the number of new requests imported
- */
-export async function syncGoogleFormResponses(): Promise<number> {
-  // Call the Edge Function that fetches from Google Sheets and imports new rows
-  const { data, error } = await supabase.functions.invoke('sync-prayer-requests', {
-    method: 'POST',
-  });
-
-  if (error) throw error;
-  return data?.newCount ?? 0;
-}

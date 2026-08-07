@@ -347,7 +347,11 @@ export async function updateScheduledSms(
  * Fetch SMS logs with optional filters
  */
 export async function fetchSmsLogs(eventId?: string, announcementId?: string): Promise<SmsLog[]> {
-  let query = supabase.from('sms_logs').select('*, profiles(full_name)').order('created_at', { ascending: false });
+  let query = supabase
+    .from('sms_logs')
+    .select('*, profiles(full_name)')
+    .order('created_at', { ascending: false })
+    .limit(5); // Show only latest 5 SMS logs
 
   if (eventId) {
     query = query.eq('event_id', eventId);

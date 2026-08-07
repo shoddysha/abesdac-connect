@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { HandHeart, Search, Check, Clock, Sparkles, Trash2, ExternalLink, RefreshCw } from 'lucide-react';
+import { HandHeart, Search, Check, Clock, Sparkles, Trash2, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -10,7 +10,6 @@ import {
   fetchPrayerRequests,
   updatePrayerRequest,
   deletePrayerRequest,
-  syncGoogleFormResponses,
   type PrayerStatus,
 } from '@/services/prayerRequests';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
@@ -26,7 +25,6 @@ export function PrayerRequests() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<PrayerStatus | 'all'>('all');
   const [answeringRequest, setAnsweringRequest] = useState<any>(null);
-  const [syncing, setSyncing] = useState(false);
 
   const requestsQuery = useQuery({
     queryKey: ['prayer-requests'],
@@ -67,47 +65,23 @@ export function PrayerRequests() {
     }
   }
 
-  async function handleSyncGoogleForms() {
-    setSyncing(true);
-    try {
-      const newCount = await syncGoogleFormResponses();
-      queryClient.invalidateQueries({ queryKey: ['prayer-requests'] });
-      if (newCount > 0) {
-        toast.success(`Synced ${newCount} new prayer request${newCount > 1 ? 's' : ''}`);
-      } else {
-        toast.success('No new prayer requests found');
-      }
-    } catch (err) {
-      toast.error((err as Error).message || 'Failed to sync prayer requests');
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Prayer Requests</h1>
           <p className="text-sm text-slate-500">
-            Prayer requests automatically synced from Google Forms submissions.
+            Prayer requests received automatically from Google Forms.
           </p>
         </div>
-        <div className="flex gap-2">
-          {canManage && (
-            <Button variant="outline" onClick={handleSyncGoogleForms} isLoading={syncing}>
-              <RefreshCw className="h-4 w-4" /> Sync Now
-            </Button>
-          )}
-          <a
-            href="https://forms.google.com/your-form-url"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
-          >
-            <ExternalLink className="h-4 w-4" /> Open Prayer Form
-          </a>
-        </div>
+        <a
+          href="https://forms.google.com/your-form-url"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
+        >
+          <ExternalLink className="h-4 w-4" /> Open Prayer Form
+        </a>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

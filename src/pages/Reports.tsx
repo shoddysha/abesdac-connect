@@ -1,14 +1,17 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, subDays } from 'date-fns';
-import { Download } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
+import { Download, Users, UserPlus, HandHeart, TrendingUp } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/EmptyState';
+import { StatCard } from '@/components/ui/StatCard';
 import { fetchMembers } from '@/services/members';
 import { fetchMinistries } from '@/services/ministries';
 import { fetchAttendanceSummary } from '@/services/attendance';
+import { fetchRecentVisitors } from '@/services/visitors';
+import { fetchPrayerRequests, getOpenPrayerRequestsCount } from '@/services/prayerRequests';
 import { exportToCSV, exportToExcel, exportToPDF } from '@/utils/export';
 
 const COLORS = ['#0F2A5F', '#1E5EFF', '#D4A76A', '#64748B', '#22C55E', '#EF4444'];
@@ -31,8 +34,12 @@ export function Reports() {
     queryKey: ['attendance-report'],
     queryFn: () => fetchAttendanceSummary(format(subDays(new Date(), 90), 'yyyy-MM-dd'), format(new Date(), 'yyyy-MM-dd')),
   });
+  const visitorsQuery = useQuery({ queryKey: ['visitors-report'], queryFn: () => fetchRecentVisitors(100) });
+  const prayerRequestsQuery = useQuery({ queryKey: ['prayer-requests-report'], queryFn: () => fetchPrayerRequests(100) });
 
   const members = membersQuery.data ?? [];
+  const visitors = visitorsQuery.data ?? [];
+  const prayerRequests = prayerRequestsQuery.data ?? [];
 
   const genderData = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -72,6 +79,48 @@ export function Reports() {
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [attendanceQuery.data]);
 
+  // Visitors statistics
+  const visitorsThisMonth = useMemo(() => {
+    const monthStart = startOfMonth(new Date());
+    return visitors.filter((v) => new Date(v.visit_date) >= monthStart).length;
+  }, [visitors]);
+
+  const visitorsNotFollowedUp = useMemo(() => {
+    return visitors.filter((v) => !v.followed_up).length;
+  }, [visitors]);
+
+  const visitorsByMonth = useMemo(() => {
+    const counts: Record<string, number> = {};
+    visitors.forEach((v) => {
+      const month = format(new Date(v.visit_date), 'MMM yyyy');
+      counts[month] = (counts[month] ?? 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([month, count]) => ({ month, count }))
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-6); // Last 6 months
+  }, [visitors]);
+
+  // Prayer Requests statistics
+  const openPrayerRequests = useMemo(() => {
+    return prayerRequests.filter((p) => p.status === 'open').length;
+  }, [prayerRequests]);
+
+  const answeredPrayerRequests = useMemo(() => {
+    return prayerRequests.filter((p) => p.status === 'answered').length;
+  }, [prayerRequests]);
+
+  const prayerRequestsByStatus = useMemo(() => {
+    const open = prayerRequests.filter((p) => p.status === 'open').length;
+    const ongoing = prayerRequests.filter((p) => p.status === 'ongoing').length;
+    const answered = prayerRequests.filter((p) => p.status === 'answered').length;
+    return [
+      { name: 'Open', value: open },
+      { name: 'Ongoing', value: ongoing },
+      { name: 'Answered', value: answered },
+    ].filter((item) => item.value > 0);
+  }, [prayerRequests]);
+
   const memberStatRows = () =>
     members.map((m) => ({
       'Member ID': m.member_code,
@@ -89,8 +138,8 @@ export function Reports() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-ink">Reports</h1>
-          <p className="text-sm text-slate-500">Member, attendance, and ministry statistics.</p>
+          <h1 className="text-2xl font-bold text-ink">Reports & Analytics</h1>
+          <p className="text-sm text-slate-500">Member, visitor, attendance, and ministry statistics.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => exportToCSV('member-report', memberStatRows())}>
@@ -113,6 +162,36 @@ export function Reports() {
             <Download className="h-4 w-4" /> PDF
           </Button>
         </div>
+      </div>
+
+      {/* Summary Stats */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Total Members"
+          value={members.length.toString()}
+          icon={Users}
+          tone="blue"
+        />
+        <StatCard
+          title="Visitors This Month"
+          value={visitorsThisMonth.toString()}
+          subtitle={`${visitorsNotFollowedUp} need follow-up`}
+          icon={UserPlus}
+          tone="green"
+        />
+        <StatCard
+          title="Open Prayer Requests"
+          value={openPrayerRequests.toString()}
+          subtitle={`${answeredPrayerRequests} answered`}
+          icon={HandHeart}
+          tone="purple"
+        />
+        <StatCard
+          title="Active Ministries"
+          value={(ministriesQuery.data ?? []).filter((m) => m.is_active).length.toString()}
+          icon={TrendingUp}
+          tone="amber"
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -172,6 +251,53 @@ export function Reports() {
             </ResponsiveContainer>
           )}
         </Card>
+
+        <Card>
+          <CardHeader title="Visitor trends (last 6 months)" />
+          {visitorsQuery.isLoading ? (
+            <Spinner />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={visitorsByMonth}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Line type="monotone" dataKey="count" stroke="#22C55E" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader title="Prayer requests status" />
+          {prayerRequestsQuery.isLoading ? (
+            <Spinner />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie 
+                  data={prayerRequestsByStatus} 
+                  dataKey="value" 
+                  nameKey="name" 
+                  innerRadius={55} 
+                  outerRadius={90} 
+                  paddingAngle={2}
+                >
+                  {prayerRequestsByStatus.map((entry, index) => {
+                    const colorMap: Record<string, string> = {
+                      'Open': '#3B82F6',
+                      'Ongoing': '#F59E0B',
+                      'Answered': '#22C55E',
+                    };
+                    return <Cell key={`cell-${index}`} fill={colorMap[entry.name] || COLORS[index]} />;
+                  })}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
       </div>
 
       <Card>
@@ -197,6 +323,52 @@ export function Reports() {
           </table>
         </div>
       </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader title="Recent visitors summary" />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
+              <span className="text-sm font-medium text-slate-700">Total Visitors</span>
+              <span className="text-lg font-bold text-ink">{visitors.length}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-amber-50 p-3">
+              <span className="text-sm font-medium text-amber-700">Pending Follow-up</span>
+              <span className="text-lg font-bold text-amber-700">{visitorsNotFollowedUp}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-green-50 p-3">
+              <span className="text-sm font-medium text-green-700">Followed Up</span>
+              <span className="text-lg font-bold text-green-700">{visitors.filter((v) => v.followed_up).length}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-blue-50 p-3">
+              <span className="text-sm font-medium text-blue-700">This Month</span>
+              <span className="text-lg font-bold text-blue-700">{visitorsThisMonth}</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Prayer requests summary" />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-lg bg-blue-50 p-3">
+              <span className="text-sm font-medium text-blue-700">Open Requests</span>
+              <span className="text-lg font-bold text-blue-700">{openPrayerRequests}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-amber-50 p-3">
+              <span className="text-sm font-medium text-amber-700">Ongoing</span>
+              <span className="text-lg font-bold text-amber-700">{prayerRequests.filter((p) => p.status === 'ongoing').length}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-green-50 p-3">
+              <span className="text-sm font-medium text-green-700">Answered</span>
+              <span className="text-lg font-bold text-green-700">{answeredPrayerRequests}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-purple-50 p-3">
+              <span className="text-sm font-medium text-purple-700">Anonymous</span>
+              <span className="text-lg font-bold text-purple-700">{prayerRequests.filter((p) => p.is_anonymous).length}</span>
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
