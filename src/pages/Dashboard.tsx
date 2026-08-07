@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Users, UserCheck, CalendarDays, Activity, UserPlus, ClipboardCheck, Megaphone, Cake, UserPlus2 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { StatCard } from '@/components/ui/StatCard';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
@@ -221,16 +221,56 @@ export function Dashboard() {
         <Card className="lg:col-span-2">
           <CardHeader title="Gender distribution" />
           {stats && stats.total > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={genderData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80} paddingAngle={2}>
-                  {genderData.map((_, i) => (
-                    <Cell key={i} fill={GENDER_COLORS[i]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={genderData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={3}
+                    label={({ name, percent }) =>
+                      `${name} ${(percent * 100).toFixed(0)}%`
+                    }
+                    labelLine={true}
+                  >
+                    {genderData.map((_, i) => (
+                      <Cell key={i} fill={GENDER_COLORS[i]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => [`${value} members`, '']} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Distribution bars below the chart */}
+              <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                {genderData.map((entry, i) => (
+                  <div key={entry.name} className="flex items-center gap-3">
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: GENDER_COLORS[i] }}
+                    />
+                    <span className="w-14 text-sm font-medium text-ink">{entry.name}</span>
+                    <div className="flex-1 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-2 rounded-full transition-all duration-500"
+                        style={{
+                          width: stats.total > 0
+                            ? `${Math.round((entry.value / stats.total) * 100)}%`
+                            : '0%',
+                          backgroundColor: GENDER_COLORS[i],
+                        }}
+                      />
+                    </div>
+                    <span className="w-20 text-right text-sm text-slate-500">
+                      {entry.value} ({stats.total > 0 ? Math.round((entry.value / stats.total) * 100) : 0}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
             <p className="py-10 text-center text-sm text-slate-400">No member data yet</p>
           )}

@@ -30,7 +30,9 @@ serve(async (req) => {
 
     // Fetch from Google Sheets
     // Range: A:D means columns A through D (Timestamp, Name, Prayer Request, Anonymous)
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Form Responses 1!A:D?key=${API_KEY}`;
+    // "Form Responses 1" is the default tab name Google Forms creates
+    const range = encodeURIComponent('Form Responses 1!A:D');
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?key=${API_KEY}`;
     
     console.log('Fetching from Google Sheets...');
     const response = await fetch(url);
