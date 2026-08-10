@@ -22,11 +22,14 @@ export function PrayerRequests() {
   const { hasRole } = useAuth();
   const queryClient = useQueryClient();
   const canManage = hasRole('administrator', 'pastor', 'secretary');
+  const canDelete = hasRole('administrator', 'secretary'); // Secretary can now delete
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<PrayerStatus | 'all'>('all');
   const [answeringRequest, setAnsweringRequest] = useState<any>(null);
   const [syncing, setSyncing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const requestsQuery = useQuery({
     queryKey: ['prayer-requests'],
@@ -41,6 +44,23 @@ export function PrayerRequests() {
     .filter((r) =>
       `${r.requested_by} ${r.request_text}`.toLowerCase().includes(search.toLowerCase())
     );
+
+  // Pagination
+  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedRequests = filteredRequests.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filter or search changes
+  const handleFilterChange = (newFilter: PrayerStatus | 'all') => {
+    setStatusFilter(newFilter);
+    setCurrentPage(1);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setCurrentPage(1);
+  };
 
   const openCount = requests.filter((r) => r.status === 'open').length;
   const ongoingCount = requests.filter((r) => r.status === 'ongoing').length;
@@ -102,7 +122,7 @@ export function PrayerRequests() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="hover:shadow-md transition-shadow" onClick={() => setStatusFilter('open')}>
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleFilterChange('open')}>
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-100 p-2.5">
               <Clock className="h-5 w-5 text-blue-600" />
@@ -113,7 +133,7 @@ export function PrayerRequests() {
             </div>
           </div>
         </Card>
-        <Card className="hover:shadow-md transition-shadow" onClick={() => setStatusFilter('ongoing')}>
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleFilterChange('ongoing')}>
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-amber-100 p-2.5">
               <HandHeart className="h-5 w-5 text-amber-600" />
@@ -124,7 +144,7 @@ export function PrayerRequests() {
             </div>
           </div>
         </Card>
-        <Card className="hover:shadow-md transition-shadow" onClick={() => setStatusFilter('answered')}>
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleFilterChange('answered')}>
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-green-100 p-2.5">
               <Check className="h-5 w-5 text-green-600" />
@@ -142,7 +162,7 @@ export function PrayerRequests() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search prayer requests…"
             className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-secondary focus:outline-none focus:ring-2 focus:ring-secondary-50"
           />
@@ -151,28 +171,28 @@ export function PrayerRequests() {
           <Button
             size="sm"
             variant={statusFilter === 'all' ? 'primary' : 'outline'}
-            onClick={() => setStatusFilter('all')}
+            onClick={() => handleFilterChange('all')}
           >
             All
           </Button>
           <Button
             size="sm"
             variant={statusFilter === 'open' ? 'primary' : 'outline'}
-            onClick={() => setStatusFilter('open')}
+            onClick={() => handleFilterChange('open')}
           >
             Open
           </Button>
           <Button
             size="sm"
             variant={statusFilter === 'ongoing' ? 'primary' : 'outline'}
-            onClick={() => setStatusFilter('ongoing')}
+            onClick={() => handleFilterChange('ongoing')}
           >
             Ongoing
           </Button>
           <Button
             size="sm"
             variant={statusFilter === 'answered' ? 'primary' : 'outline'}
-            onClick={() => setStatusFilter('answered')}
+            onClick={() => handleFilterChange('answered')}
           >
             Answered
           </Button>
@@ -189,7 +209,7 @@ export function PrayerRequests() {
         />
       ) : (
         <div className="space-y-3">
-          {filteredRequests.map((request) => (
+          {paginatedRequests.map((request) => (
             <Card key={request.id} className="hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -252,7 +272,7 @@ export function PrayerRequests() {
                         </Button>
                       </>
                     )}
-                    {hasRole('administrator') && (
+                    {canDelete && (
                       <button
                         onClick={() => handleDelete(request.id)}
                         className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
@@ -266,6 +286,48 @@ export function PrayerRequests() {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {!requestsQuery.isLoading && filteredRequests.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-slate-200 pt-4">
+          <p className="text-sm text-slate-600">
+            Showing {startIndex + 1} to {Math.min(endIndex, filteredRequests.length)} of {filteredRequests.length} requests
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <div className="flex gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    currentPage === page
+                      ? 'bg-secondary text-white'
+                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
 

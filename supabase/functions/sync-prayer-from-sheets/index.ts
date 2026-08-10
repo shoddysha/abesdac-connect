@@ -80,6 +80,18 @@ serve(async (req) => {
         continue; // Already imported
       }
 
+      // Check if this prayer was previously deleted (don't re-import)
+      const { data: wasDeleted } = await supabase
+        .from('deleted_prayer_timestamps')
+        .select('id')
+        .eq('google_form_timestamp', timestamp)
+        .maybeSingle();
+
+      if (wasDeleted) {
+        console.log(`Skipping previously deleted prayer: ${timestamp}`);
+        continue; // Was deleted, don't re-import
+      }
+
       // Determine if anonymous
       const isAnonymous = anonymous?.toLowerCase() === 'yes';
       const displayName = isAnonymous ? 'Anonymous' : name;

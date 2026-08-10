@@ -61,10 +61,18 @@ export function Events() {
   const daysInMonth = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) });
   const eventsByDay = (day: Date) => events.filter((e) => isSameDay(new Date(e.start_time), day));
 
-  // Admin/secretary manage every event; a Ministry Leader only manages
-  // events they personally created.
+  // Admin/secretary manage every event; a Ministry Leader can manage:
+  // 1. Events they personally created
+  // 2. Events created by other ministry leaders
   function canManageEvent(event: Event) {
-    return canManage || (profile?.role === 'ministry_leader' && event.created_by === profile.id);
+    if (canManage) return true; // Admin/secretary can manage all
+    
+    // Ministry leader can edit if created by any ministry leader
+    if (profile?.role === 'ministry_leader') {
+      return event.created_by === profile.id || event.created_by_role === 'ministry_leader';
+    }
+    
+    return false;
   }
 
   const visibleEvents = useMemo(() => {

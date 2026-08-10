@@ -203,9 +203,9 @@ export function Settings() {
         </form>
       </Card>
 
-      {hasRole('administrator') && (
+      {hasRole('administrator', 'secretary') && (
         <Card>
-          <CardHeader title="Backup" action={<Database className="h-4 w-4 text-slate-400" />} />
+          <CardHeader title="Backup & Restore" action={<Database className="h-4 w-4 text-slate-400" />} />
           <p className="mb-4 text-sm text-slate-500">
             Download a complete snapshot of every member, ministry, attendance record, event, announcement, user, and
             audit log as one JSON file — useful to keep a periodic copy outside the app.

@@ -12,6 +12,7 @@ import {
   MessageSquare,
   UserCog,
   Settings,
+  UsersRound,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/utils/cn';
@@ -32,8 +33,9 @@ const navItems: NavItem[] = [
   { to: '/events', label: 'Events', icon: CalendarDays },
   { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['administrator', 'pastor'] },
   { to: '/announcements', label: 'Announcements', icon: Megaphone },
-  { to: '/visitors', label: 'Visitors', icon: UserPlus2, roles: ['administrator', 'secretary'] },
-  { to: '/prayer-requests', label: 'Prayer Requests', icon: HandHeart },
+  { to: '/visitors', label: 'Visitors', icon: UserPlus2, roles: ['administrator', 'secretary', 'ministry_leader'] },
+  { to: '/prayer-requests', label: 'Prayer Requests', icon: HandHeart, roles: ['administrator', 'pastor', 'secretary'] },
+  { to: '/leaders', label: 'Leaders', icon: UsersRound, roles: ['administrator', 'pastor', 'ministry_leader', 'secretary'] },
   { to: '/sms', label: 'SMS', icon: MessageSquare, roles: ['administrator', 'secretary'] },
   { to: '/users', label: 'User Management', icon: UserCog, roles: ['administrator'] },
   { to: '/settings', label: 'Settings', icon: Settings },

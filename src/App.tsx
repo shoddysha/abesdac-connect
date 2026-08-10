@@ -3,6 +3,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppLayout } from '@/layouts/AppLayout';
 
+import { Leaders } from '@/pages/Leaders';
 import { Login } from '@/pages/Login';
 import { ForgotPassword } from '@/pages/ForgotPassword';
 import { ResetPassword } from '@/pages/ResetPassword';
@@ -54,12 +55,23 @@ export function App() {
             />
             <Route path="/announcements" element={<Announcements />} />
             <Route path="/visitors" element={
-                <ProtectedRoute roles={['administrator', 'secretary']}>
+                <ProtectedRoute roles={['administrator', 'secretary', 'ministry_leader']}>
                   <Visitors />
                 </ProtectedRoute>
               }
             />
-            <Route path="/prayer-requests" element={<PrayerRequests />} />
+            <Route path="/prayer-requests" element={
+                <ProtectedRoute roles={['administrator', 'pastor', 'secretary']}>
+                  <PrayerRequests />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/leaders" element={
+                <ProtectedRoute roles={['administrator', 'pastor', 'ministry_leader', 'secretary']}>
+                  <Leaders />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/sms"
               element={
