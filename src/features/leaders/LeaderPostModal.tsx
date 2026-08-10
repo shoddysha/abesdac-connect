@@ -55,7 +55,7 @@ export function LeaderPostModal({ post, onClose, onSave }: LeaderPostModalProps)
   }
 
   return (
-    <Modal isOpen onClose={onClose} title={post ? 'Edit Post' : 'New Post'}>
+    <Modal open={true} onClose={onClose} title={post ? 'Edit Post' : 'New Post'}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-ink">Type</label>
