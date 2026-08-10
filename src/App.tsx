@@ -21,6 +21,7 @@ import { PrayerRequests } from '@/pages/PrayerRequests';
 import { Sms } from '@/pages/Sms';
 import { Users } from '@/pages/Users';
 import { Settings } from '@/pages/Settings';
+import { AuditLogs } from '@/pages/AuditLogs';
 
 export function App() {
   return (
@@ -85,6 +86,14 @@ export function App() {
               element={
                 <ProtectedRoute roles={['administrator']}>
                   <Users />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/audit-logs"
+              element={
+                <ProtectedRoute roles={['administrator', 'secretary']}>
+                  <AuditLogs />
                 </ProtectedRoute>
               }
             />

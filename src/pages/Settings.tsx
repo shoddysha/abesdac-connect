@@ -145,8 +145,7 @@ export function Settings() {
   }
 
   function viewAuditLogs() {
-    toast.success('Audit logs are displayed in the Dashboard activity feed');
-    navigate('/');
+    navigate('/audit-logs');
   }
 
   function manageUserRoles() {

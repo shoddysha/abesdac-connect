@@ -13,6 +13,7 @@ import {
   UserCog,
   Settings,
   UsersRound,
+  Shield,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/utils/cn';
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { to: '/leaders', label: 'Leaders', icon: UsersRound, roles: ['administrator', 'pastor', 'ministry_leader', 'secretary'] },
   { to: '/sms', label: 'SMS', icon: MessageSquare, roles: ['administrator', 'secretary'] },
   { to: '/users', label: 'User Management', icon: UserCog, roles: ['administrator'] },
+  { to: '/audit-logs', label: 'Audit Logs', icon: Shield, roles: ['administrator', 'secretary'] },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 

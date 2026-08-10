@@ -1,115 +1,255 @@
 import { supabase } from '@/lib/supabase';
 
-export type LeaderPostType = 'announcement' | 'task' | 'note';
-export type LeaderPostStatus = 'pending' | 'in_progress' | 'completed';
+export type LeadershipRole = 
+  | 'main_leader' 
+  | 'deputy' 
+  | 'secretary' 
+  | 'treasurer' 
+  | 'coordinator'
+  | 'assistant'
+  | 'other';
 
-export interface LeaderPost {
+export interface MinistryLeader {
   id: string;
-  title: string;
-  content: string;
-  post_type: LeaderPostType;
-  assigned_to: string | null;
-  assigned_to_name?: string | null;
-  status: LeaderPostStatus;
-  created_by: string | null;
-  created_by_name?: string | null;
+  ministry_id: string;
+  ministry_name: string;
+  member_id: string;
+  member_name: string;
+  member_code: string;
+  member_phone: string | null;
+  member_email: string | null;
+  leadership_role: LeadershipRole;
+  portfolio: string | null;
+  bio: string | null;
+  appointed_date: string;
+  is_active: boolean;
   created_at: string;
-  updated_at: string;
 }
 
-export interface CreateLeaderPostInput {
-  title: string;
-  content: string;
-  post_type: LeaderPostType;
-  assigned_to?: string | null;
-  status?: LeaderPostStatus;
+export interface CreateMinistryLeaderInput {
+  ministry_id: string;
+  member_id: string;
+  leadership_role: LeadershipRole;
+  portfolio?: string;
+  bio?: string;
+  appointed_date?: string;
 }
 
-export interface UpdateLeaderPostInput {
-  title?: string;
-  content?: string;
-  post_type?: LeaderPostType;
-  assigned_to?: string | null;
-  status?: LeaderPostStatus;
+export interface UpdateMinistryLeaderInput {
+  leadership_role?: LeadershipRole;
+  portfolio?: string;
+  bio?: string;
+  is_active?: boolean;
 }
 
-export async function fetchLeaderPosts(): Promise<LeaderPost[]> {
+/**
+ * Fetch all ministry leaders across all ministries
+ */
+export async function fetchAllMinistryLeaders(): Promise<MinistryLeader[]> {
   const { data, error } = await supabase
-    .from('leader_posts')
+    .from('ministry_leaders')
     .select(`
       *,
-      assigned_to_profile:profiles!leader_posts_assigned_to_fkey(full_name),
-      created_by_profile:profiles!leader_posts_created_by_fkey(full_name)
+      ministries(name),
+      members(
+        first_name,
+        last_name,
+        member_code,
+        phone,
+        email
+      )
     `)
-    .order('created_at', { ascending: false });
+    .eq('is_active', true)
+    .order('ministry_id')
+    .order('leadership_role');
 
   if (error) throw error;
 
-  return (data || []).map((post: any) => ({
-    ...post,
-    assigned_to_name: post.assigned_to_profile?.full_name,
-    created_by_name: post.created_by_profile?.full_name,
+  return (data || []).map((leader: any) => ({
+    id: leader.id,
+    ministry_id: leader.ministry_id,
+    ministry_name: leader.ministries?.name || 'Unknown Ministry',
+    member_id: leader.member_id,
+    member_name: `${leader.members?.first_name} ${leader.members?.last_name}`,
+    member_code: leader.members?.member_code,
+    member_phone: leader.members?.phone,
+    member_email: leader.members?.email,
+    leadership_role: leader.leadership_role,
+    portfolio: leader.portfolio,
+    bio: leader.bio,
+    appointed_date: leader.appointed_date,
+    is_active: leader.is_active,
+    created_at: leader.created_at,
   }));
 }
 
-export async function createLeaderPost(input: CreateLeaderPostInput): Promise<LeaderPost> {
+/**
+ * Fetch leaders for a specific ministry
+ */
+export async function fetchMinistryLeaders(ministryId: string): Promise<MinistryLeader[]> {
   const { data, error } = await supabase
-    .from('leader_posts')
+    .from('ministry_leaders')
+    .select(`
+      *,
+      ministries(name),
+      members(
+        first_name,
+        last_name,
+        member_code,
+        phone,
+        email
+      )
+    `)
+    .eq('ministry_id', ministryId)
+    .eq('is_active', true)
+    .order('leadership_role');
+
+  if (error) throw error;
+
+  return (data || []).map((leader: any) => ({
+    id: leader.id,
+    ministry_id: leader.ministry_id,
+    ministry_name: leader.ministries?.name || 'Unknown Ministry',
+    member_id: leader.member_id,
+    member_name: `${leader.members?.first_name} ${leader.members?.last_name}`,
+    member_code: leader.members?.member_code,
+    member_phone: leader.members?.phone,
+    member_email: leader.members?.email,
+    leadership_role: leader.leadership_role,
+    portfolio: leader.portfolio,
+    bio: leader.bio,
+    appointed_date: leader.appointed_date,
+    is_active: leader.is_active,
+    created_at: leader.created_at,
+  }));
+}
+
+/**
+ * Add a new leader to a ministry
+ */
+export async function createMinistryLeader(input: CreateMinistryLeaderInput): Promise<MinistryLeader> {
+  const { data, error } = await supabase
+    .from('ministry_leaders')
     .insert({
-      title: input.title,
-      content: input.content,
-      post_type: input.post_type,
-      assigned_to: input.assigned_to ?? null,
-      status: input.status ?? 'pending',
+      ministry_id: input.ministry_id,
+      member_id: input.member_id,
+      leadership_role: input.leadership_role,
+      portfolio: input.portfolio || null,
+      bio: input.bio || null,
+      appointed_date: input.appointed_date || new Date().toISOString().split('T')[0],
     })
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  
+  // Fetch full details
+  const leaders = await fetchMinistryLeaders(input.ministry_id);
+  return leaders.find(l => l.id === data.id)!;
 }
 
-export async function updateLeaderPost(
+/**
+ * Update a ministry leader's details
+ */
+export async function updateMinistryLeader(
   id: string,
-  updates: UpdateLeaderPostInput
+  updates: UpdateMinistryLeaderInput
 ): Promise<void> {
   const { error } = await supabase
-    .from('leader_posts')
+    .from('ministry_leaders')
     .update(updates)
     .eq('id', id);
 
   if (error) throw error;
 }
 
-export async function deleteLeaderPost(id: string): Promise<void> {
+/**
+ * Remove a leader from a ministry (soft delete - sets is_active to false)
+ */
+export async function removeMinistryLeader(id: string): Promise<void> {
   const { error } = await supabase
-    .from('leader_posts')
+    .from('ministry_leaders')
+    .update({ is_active: false })
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+/**
+ * Permanently delete a ministry leader record
+ */
+export async function deleteMinistryLeader(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('ministry_leaders')
     .delete()
     .eq('id', id);
 
   if (error) throw error;
 }
 
-export async function exportLeaderPosts(posts: LeaderPost[]): Promise<void> {
-  // Simple CSV export
-  const headers = ['Title', 'Type', 'Status', 'Content', 'Assigned To', 'Created By', 'Date'];
-  const rows = posts.map((p) => [
-    p.title,
-    p.post_type,
-    p.status,
-    p.content.replace(/\n/g, ' '),
-    p.assigned_to_name || '',
-    p.created_by_name || '',
-    new Date(p.created_at).toLocaleDateString(),
+/**
+ * Export all ministry leaders to CSV
+ */
+export async function exportMinistryLeaders(leaders: MinistryLeader[]): Promise<void> {
+  const headers = [
+    'Ministry',
+    'Name',
+    'Member Code',
+    'Leadership Role',
+    'Portfolio',
+    'Phone',
+    'Email',
+    'Appointed Date',
+    'Bio',
+  ];
+  
+  const roleLabels: Record<LeadershipRole, string> = {
+    main_leader: 'Main Leader',
+    deputy: 'Deputy Leader',
+    secretary: 'Secretary',
+    treasurer: 'Treasurer',
+    coordinator: 'Coordinator',
+    assistant: 'Assistant',
+    other: 'Other',
+  };
+
+  const rows = leaders.map((l) => [
+    l.ministry_name,
+    l.member_name,
+    l.member_code,
+    roleLabels[l.leadership_role] || l.leadership_role,
+    l.portfolio || '',
+    l.member_phone || '',
+    l.member_email || '',
+    new Date(l.appointed_date).toLocaleDateString(),
+    (l.bio || '').replace(/\n/g, ' '),
   ]);
 
-  const csv = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n');
+  const csv = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${cell}"`).join(','))
+    .join('\n');
 
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `leaders-posts-${new Date().toISOString().split('T')[0]}.csv`;
+  a.download = `ministry-leaders-${new Date().toISOString().split('T')[0]}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Get leadership role display label
+ */
+export function getLeadershipRoleLabel(role: LeadershipRole): string {
+  const labels: Record<LeadershipRole, string> = {
+    main_leader: 'Main Leader',
+    deputy: 'Deputy Leader',
+    secretary: 'Secretary',
+    treasurer: 'Treasurer',
+    coordinator: 'Coordinator',
+    assistant: 'Assistant',
+    other: 'Other',
+  };
+  return labels[role] || role;
 }
