@@ -23,10 +23,10 @@ const moduleLabels: Record<string, string> = {
   sms_logs: 'SMS',
 };
 
-const actionColors: Record<string, 'success' | 'primary' | 'danger' | 'slate'> = {
-  INSERT: 'success',
-  UPDATE: 'primary',
-  DELETE: 'danger',
+const actionColors: Record<string, 'green' | 'blue' | 'red' | 'slate'> = {
+  INSERT: 'green',
+  UPDATE: 'blue',
+  DELETE: 'red',
 };
 
 export function AuditLogs() {
