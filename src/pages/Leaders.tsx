@@ -69,16 +69,19 @@ export function Leaders() {
     enabled: canEdit,
   });
 
+  // Get current user's ministry (if they are a ministry leader)
+  const userMinistry = ministriesQuery.data?.find((m) => m.leader_id === profile?.id);
+
   const membersQuery = useQuery({
-    queryKey: ['members', { ministry_id: userMinistry?.ministry_id }],
+    queryKey: ['members', { ministry_id: userMinistry?.id }],
     queryFn: async () => {
-      if (!userMinistry?.ministry_id) return [];
+      if (!userMinistry?.id) return [];
       // Fetch only members from the ministry leader's ministry
       const { data, error } = await supabase
         .from('members')
         .select('*')
         .eq('status', 'active')
-        .or(`ministry_id.eq.${userMinistry.ministry_id},ministry_id.is.null`)
+        .or(`ministry_id.eq.${userMinistry.id},ministry_id.is.null`)
         .order('first_name');
       if (error) throw error;
       return data || [];

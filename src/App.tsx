@@ -23,6 +23,8 @@ import { Users } from '@/pages/Users';
 import { Settings } from '@/pages/Settings';
 import { AuditLogs } from '@/pages/AuditLogs';
 import { MinistryDashboard } from '@/pages/MinistryDashboard';
+import { MinistryTasks } from '@/pages/MinistryTasks';
+import { MinistryReports } from '@/pages/MinistryReports';
 
 export function App() {
   return (
@@ -77,6 +79,18 @@ export function App() {
             <Route path="/ministry-dashboard" element={
                 <ProtectedRoute roles={['ministry_leader']}>
                   <MinistryDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/ministry-tasks" element={
+                <ProtectedRoute roles={['ministry_leader', 'administrator', 'secretary']}>
+                  <MinistryTasks />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/ministry-reports" element={
+                <ProtectedRoute roles={['ministry_leader', 'administrator', 'secretary']}>
+                  <MinistryReports />
                 </ProtectedRoute>
               }
             />

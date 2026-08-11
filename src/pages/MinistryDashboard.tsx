@@ -296,7 +296,7 @@ export function MinistryDashboard() {
                       {leader.member_name}
                     </p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <Badge tone="blue" className="text-xs">
+                      <Badge tone="blue">
                         {leader.leadership_role.replace('_', ' ')}
                       </Badge>
                     </div>
@@ -376,7 +376,7 @@ export function MinistryDashboard() {
               <ListTodo className="h-5 w-5" />
               <span className="text-sm">Manage Tasks</span>
               {stats && stats.pending > 0 && (
-                <Badge tone="amber" className="text-xs">
+                <Badge tone="amber">
                   {stats.pending} pending
                 </Badge>
               )}
