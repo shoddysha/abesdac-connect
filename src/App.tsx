@@ -22,6 +22,7 @@ import { Sms } from '@/pages/Sms';
 import { Users } from '@/pages/Users';
 import { Settings } from '@/pages/Settings';
 import { AuditLogs } from '@/pages/AuditLogs';
+import { MinistryDashboard } from '@/pages/MinistryDashboard';
 
 export function App() {
   return (
@@ -70,6 +71,12 @@ export function App() {
             <Route path="/leaders" element={
                 <ProtectedRoute roles={['administrator', 'pastor', 'ministry_leader', 'secretary']}>
                   <Leaders />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/ministry-dashboard" element={
+                <ProtectedRoute roles={['ministry_leader']}>
+                  <MinistryDashboard />
                 </ProtectedRoute>
               }
             />

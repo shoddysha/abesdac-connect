@@ -12,6 +12,9 @@ export type SmsStatus = 'pending' | 'sent' | 'failed' | 'cancelled';
 export type SmsType = 'event_notification' | 'event_reminder' | 'announcement' | 'manual';
 export type VisitType = 'sabbath_service' | 'midweek_service' | 'event';
 export type PrayerStatus = 'open' | 'ongoing' | 'answered';
+export type TaskPriority = 'high' | 'medium' | 'low';
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+export type ReportType = 'monthly' | 'quarterly' | 'annual' | 'special';
 
 export interface Profile {
   id: string;
@@ -217,3 +220,36 @@ export interface ArkeselSmsResponse {
 // untyped client instead — every service function below already casts
 // its results to these types explicitly (e.g. `as Member[]`), which is
 // where the real type-safety comes from.
+
+export interface MinistryTask {
+  id: string;
+  ministry_id: string;
+  title: string;
+  description: string | null;
+  priority: TaskPriority;
+  status: TaskStatus;
+  assigned_to: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MinistryReport {
+  id: string;
+  ministry_id: string;
+  report_period: string;
+  report_type: ReportType;
+  title: string;
+  summary: string | null;
+  achievements: string | null;
+  challenges: string | null;
+  attendance_count: number | null;
+  expenses: number | null;
+  future_plans: string | null;
+  submitted_by: string | null;
+  submitted_at: string;
+  created_at: string;
+  updated_at: string;
+}

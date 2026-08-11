@@ -14,6 +14,7 @@ import {
   Settings,
   UsersRound,
   Shield,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/utils/cn';
@@ -28,6 +29,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/ministry-dashboard', label: 'My Ministry', icon: Briefcase, roles: ['ministry_leader'] },
   { to: '/members', label: 'Members', icon: Users },
   { to: '/ministries', label: 'Ministries', icon: HeartHandshake },
   { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
