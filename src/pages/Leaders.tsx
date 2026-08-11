@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
+import { supabase } from '@/lib/supabase';
 import { fetchMembers } from '@/services/members';
 import { fetchMinistries } from '@/services/ministries';
 import {
@@ -69,9 +70,20 @@ export function Leaders() {
   });
 
   const membersQuery = useQuery({
-    queryKey: ['members', { status: 'active' }],
-    queryFn: () => fetchMembers({ status: 'active' }),
-    enabled: canEdit,
+    queryKey: ['members', { ministry_id: userMinistry?.ministry_id }],
+    queryFn: async () => {
+      if (!userMinistry?.ministry_id) return [];
+      // Fetch only members from the ministry leader's ministry
+      const { data, error } = await supabase
+        .from('members')
+        .select('*')
+        .eq('status', 'active')
+        .or(`ministry_id.eq.${userMinistry.ministry_id},ministry_id.is.null`)
+        .order('first_name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: canEdit && !!userMinistry,
   });
 
   useRealtimeQuery('ministry_leaders', ['ministry-leaders']);

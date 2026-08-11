@@ -279,7 +279,7 @@ export function Settings() {
         </Card>
       )}
 
-      {hasRole('administrator') && (
+      {hasRole('administrator', 'secretary') && (
         <Card>
           <CardHeader title="Audit & security" action={<Shield className="h-4 w-4 text-slate-400" />} />
           <p className="mb-4 text-sm text-slate-500">
@@ -287,7 +287,9 @@ export function Settings() {
           </p>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={viewAuditLogs}>View audit logs</Button>
-            <Button variant="outline" onClick={manageUserRoles}>Manage user roles</Button>
+            {hasRole('administrator') && (
+              <Button variant="outline" onClick={manageUserRoles}>Manage user roles</Button>
+            )}
           </div>
         </Card>
       )}

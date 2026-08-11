@@ -1,11 +1,15 @@
-import { useQuery } from '@tanstack/react-query';
-import { Shield, Calendar, User, Search } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Shield, Calendar, User, Search, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { fetchAuditLogs } from '@/services/audit';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import toast from 'react-hot-toast';
 import type { AuditLog } from '@/types/database';
 import { useState } from 'react';
 
@@ -30,7 +34,10 @@ const actionColors: Record<string, 'green' | 'blue' | 'red' | 'slate'> = {
 };
 
 export function AuditLogs() {
+  const { hasRole } = useAuth();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const logsQuery = useQuery({
     queryKey: ['audit-logs'],
@@ -51,6 +58,26 @@ export function AuditLogs() {
     );
   });
 
+  async function handleDeleteAll() {
+    if (!confirm('Are you sure you want to delete ALL audit logs? This action cannot be undone!')) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from('audit_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+      toast.success('All audit logs deleted');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -63,18 +90,27 @@ export function AuditLogs() {
         </p>
       </div>
 
-      <Card>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            type="text"
-            placeholder="Search logs by user, module, action, or description..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex-1">
+          <Card>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                type="text"
+                placeholder="Search logs by user, module, action, or description..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </Card>
         </div>
-      </Card>
+        {hasRole('administrator') && logs.length > 0 && (
+          <Button variant="outline" onClick={handleDeleteAll} isLoading={deleting}>
+            <Trash2 className="h-4 w-4" /> Delete All
+          </Button>
+        )}
+      </div>
 
       {logsQuery.isLoading ? (
         <Spinner />

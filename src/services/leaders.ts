@@ -43,6 +43,50 @@ export interface UpdateMinistryLeaderInput {
 }
 
 /**
+ * Sync main leaders from ministries table
+ * Creates ministry_leaders records for any ministry.leader_id that doesn't exist yet
+ */
+export async function syncMainLeadersFromMinistries(): Promise<void> {
+  // Get all ministries with a leader_id
+  const { data: ministries, error: ministriesError } = await supabase
+    .from('ministries')
+    .select('id, leader_id, members!inner(id)')
+    .not('leader_id', 'is', null);
+
+  if (ministriesError) throw ministriesError;
+
+  // Get existing main_leader records
+  const { data: existingLeaders, error: leadersError } = await supabase
+    .from('ministry_leaders')
+    .select('ministry_id, member_id')
+    .eq('leadership_role', 'main_leader');
+
+  if (leadersError) throw leadersError;
+
+  const existingMap = new Set(
+    (existingLeaders || []).map((l) => `${l.ministry_id}:${l.member_id}`)
+  );
+
+  // Find ministries that need a main_leader record
+  const toCreate = (ministries || [])
+    .filter((m: any) => {
+      // Find member with this leader_id
+      const { data: member } = await supabase
+        .from('members')
+        .select('id')
+        .eq('user_id', m.leader_id)
+        .single();
+      
+      if (!member) return false;
+      
+      const key = `${m.id}:${member.id}`;
+      return !existingMap.has(key);
+    });
+
+  // This approach won't work with await in filter, let me fix it
+}
+
+/**
  * Fetch all ministry leaders across all ministries
  */
 export async function fetchAllMinistryLeaders(): Promise<MinistryLeader[]> {

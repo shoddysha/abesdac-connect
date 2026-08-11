@@ -1,86 +1,40 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  CheckCircle2,
-  Circle,
-  AlertCircle,
-  Clock,
-  Plus,
-  Pencil,
-  Trash2,
-  FileText,
-  ListTodo,
-  TrendingUp,
-  Calendar,
-  DollarSign,
   Users,
+  Calendar,
+  TrendingUp,
+  UserPlus,
+  Phone,
+  Mail,
+  Briefcase,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Activity,
+  BarChart3,
+  Target,
+  Award,
+  ListTodo,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input, Select, Textarea } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/StatCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
+import { supabase } from '@/lib/supabase';
 import { fetchMinistries } from '@/services/ministries';
-import { fetchMembers } from '@/services/members';
-import {
-  fetchMinistryTasks,
-  createMinistryTask,
-  updateMinistryTask,
-  deleteMinistryTask,
-  getMinistryTaskStats,
-  type CreateTaskInput,
-  type MinistryTaskWithDetails,
-} from '@/services/ministryTasks';
-import {
-  fetchMinistryReports,
-  createMinistryReport,
-  updateMinistryReport,
-  deleteMinistryReport,
-  generateReportPeriods,
-  type CreateReportInput,
-  type MinistryReportWithDetails,
-} from '@/services/ministryReports';
-import type { TaskPriority, TaskStatus, ReportType } from '@/types/database';
-
-const taskSchema = z.object({
-  title: z.string().min(1, 'Required'),
-  description: z.string().optional(),
-  priority: z.enum(['high', 'medium', 'low']),
-  assigned_to: z.string().optional(),
-  due_date: z.string().optional(),
-});
-type TaskFormValues = z.infer<typeof taskSchema>;
-
-const reportSchema = z.object({
-  report_period: z.string().min(1, 'Required'),
-  report_type: z.enum(['monthly', 'quarterly', 'annual', 'special']),
-  title: z.string().min(1, 'Required'),
-  summary: z.string().optional(),
-  achievements: z.string().optional(),
-  challenges: z.string().optional(),
-  attendance_count: z.string().optional(),
-  expenses: z.string().optional(),
-  future_plans: z.string().optional(),
-});
-type ReportFormValues = z.infer<typeof reportSchema>;
+import { fetchAllMinistryLeaders } from '@/services/leaders';
+import { getMinistryTaskStats } from '@/services/ministryTasks';
+import { format, formatDistanceToNow } from 'date-fns';
 
 export function MinistryDashboard() {
   const { profile } = useAuth();
-  const queryClient = useQueryClient();
-
-  const [activeTab, setActiveTab] = useState<'tasks' | 'reports'>('tasks');
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
-  const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<MinistryTaskWithDetails | null>(null);
-  const [editingReport, setEditingReport] = useState<MinistryReportWithDetails | null>(null);
+  const navigate = useNavigate();
 
   // Fetch user's ministry
   const ministriesQuery = useQuery({
@@ -90,574 +44,378 @@ export function MinistryDashboard() {
 
   const userMinistry = ministriesQuery.data?.find((m) => m.leader_id === profile?.id);
 
-  const tasksQuery = useQuery({
-    queryKey: ['ministry-tasks', userMinistry?.id],
-    queryFn: () => fetchMinistryTasks(userMinistry!.id),
+  // Fetch ministry members
+  const membersQuery = useQuery({
+    queryKey: ['ministry-members', userMinistry?.id],
+    queryFn: async () => {
+      if (!userMinistry) return [];
+      const { data, error } = await supabase
+        .from('members')
+        .select('*')
+        .eq('ministry_id', userMinistry.id)
+        .eq('status', 'active')
+        .order('first_name');
+      if (error) throw error;
+      return data || [];
+    },
     enabled: !!userMinistry,
   });
 
-  const reportsQuery = useQuery({
-    queryKey: ['ministry-reports', userMinistry?.id],
-    queryFn: () => fetchMinistryReports(userMinistry!.id),
+  // Fetch leadership team
+  const leadersQuery = useQuery({
+    queryKey: ['ministry-leaders'],
+    queryFn: fetchAllMinistryLeaders,
+  });
+
+  // Fetch recent events for this ministry
+  const eventsQuery = useQuery({
+    queryKey: ['ministry-events', userMinistry?.id],
+    queryFn: async () => {
+      if (!userMinistry) return [];
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .or(`ministry_id.eq.${userMinistry.id},created_by_role.eq.ministry_leader`)
+        .order('start_time', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data || [];
+    },
     enabled: !!userMinistry,
   });
 
+  // Fetch task stats
   const statsQuery = useQuery({
     queryKey: ['ministry-task-stats', userMinistry?.id],
     queryFn: () => getMinistryTaskStats(userMinistry!.id),
     enabled: !!userMinistry,
   });
 
-  const membersQuery = useQuery({
-    queryKey: ['members', { status: 'active' }],
-    queryFn: () => fetchMembers({ status: 'active' }),
+  // Fetch ministry attendance stats
+  const attendanceQuery = useQuery({
+    queryKey: ['ministry-attendance', userMinistry?.id],
+    queryFn: async () => {
+      if (!userMinistry) return { total: 0, thisMonth: 0, lastMonth: 0 };
+      
+      const now = new Date();
+      const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('id, date')
+        .gte('date', firstDayLastMonth.toISOString().split('T')[0]);
+
+      if (error) throw error;
+
+      const thisMonth = (data || []).filter(
+        (a) => new Date(a.date) >= firstDayThisMonth
+      ).length;
+      const lastMonth = (data || []).filter(
+        (a) =>
+          new Date(a.date) >= firstDayLastMonth &&
+          new Date(a.date) < firstDayThisMonth
+      ).length;
+
+      return { total: data?.length || 0, thisMonth, lastMonth };
+    },
+    enabled: !!userMinistry,
   });
 
-  useRealtimeQuery('ministry_tasks', ['ministry-tasks', userMinistry?.id]);
-  useRealtimeQuery('ministry_reports', ['ministry-reports', userMinistry?.id]);
+  useRealtimeQuery('members', ['ministry-members', userMinistry?.id]);
+  useRealtimeQuery('ministry_leaders', ['ministry-leaders']);
+  useRealtimeQuery('events', ['ministry-events', userMinistry?.id]);
+  useRealtimeQuery('ministry_tasks', ['ministry-task-stats', userMinistry?.id]);
 
-  const tasks = tasksQuery.data ?? [];
-  const reports = reportsQuery.data ?? [];
+  const members = membersQuery.data ?? [];
+  const leaders = (leadersQuery.data ?? []).filter((l) => l.ministry_id === userMinistry?.id);
+  const events = eventsQuery.data ?? [];
   const stats = statsQuery.data;
-
-  const taskForm = useForm<TaskFormValues>({
-    resolver: zodResolver(taskSchema),
-    defaultValues: { priority: 'medium' },
-  });
-
-  const reportForm = useForm<ReportFormValues>({
-    resolver: zodResolver(reportSchema),
-    defaultValues: { report_type: 'monthly' },
-  });
-
-  const reportType = reportForm.watch('report_type');
-  const reportPeriods = generateReportPeriods(reportType);
-
-  function openTaskModal(task?: MinistryTaskWithDetails) {
-    if (task) {
-      setEditingTask(task);
-      taskForm.reset({
-        title: task.title,
-        description: task.description || '',
-        priority: task.priority,
-        assigned_to: task.assigned_to || '',
-        due_date: task.due_date || '',
-      });
-    } else {
-      setEditingTask(null);
-      taskForm.reset({ title: '', description: '', priority: 'medium', assigned_to: '', due_date: '' });
-    }
-    setTaskModalOpen(true);
-  }
-
-  function openReportModal(report?: MinistryReportWithDetails) {
-    if (report) {
-      setEditingReport(report);
-      reportForm.reset({
-        report_period: report.report_period,
-        report_type: report.report_type,
-        title: report.title,
-        summary: report.summary || '',
-        achievements: report.achievements || '',
-        challenges: report.challenges || '',
-        attendance_count: report.attendance_count?.toString() || '',
-        expenses: report.expenses?.toString() || '',
-        future_plans: report.future_plans || '',
-      });
-    } else {
-      setEditingReport(null);
-      reportForm.reset({
-        report_period: '',
-        report_type: 'monthly',
-        title: '',
-        summary: '',
-        achievements: '',
-        challenges: '',
-        attendance_count: '',
-        expenses: '',
-        future_plans: '',
-      });
-    }
-    setReportModalOpen(true);
-  }
-
-  async function onTaskSubmit(values: TaskFormValues) {
-    if (!userMinistry) return;
-
-    try {
-      if (editingTask) {
-        await updateMinistryTask(editingTask.id, {
-          title: values.title,
-          description: values.description,
-          priority: values.priority,
-          assigned_to: values.assigned_to || undefined,
-          due_date: values.due_date || undefined,
-        });
-        toast.success('Task updated');
-      } else {
-        await createMinistryTask({
-          ministry_id: userMinistry.id,
-          title: values.title,
-          description: values.description,
-          priority: values.priority,
-          assigned_to: values.assigned_to || undefined,
-          due_date: values.due_date || undefined,
-        });
-        toast.success('Task created');
-      }
-      queryClient.invalidateQueries({ queryKey: ['ministry-tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['ministry-task-stats'] });
-      setTaskModalOpen(false);
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
-
-  async function onReportSubmit(values: ReportFormValues) {
-    if (!userMinistry) return;
-
-    try {
-      const input: CreateReportInput | any = {
-        ministry_id: userMinistry.id,
-        report_period: values.report_period,
-        report_type: values.report_type,
-        title: values.title,
-        summary: values.summary,
-        achievements: values.achievements,
-        challenges: values.challenges,
-        attendance_count: values.attendance_count ? parseInt(values.attendance_count) : undefined,
-        expenses: values.expenses ? parseFloat(values.expenses) : undefined,
-        future_plans: values.future_plans,
-      };
-
-      if (editingReport) {
-        await updateMinistryReport(editingReport.id, input);
-        toast.success('Report updated');
-      } else {
-        await createMinistryReport(input);
-        toast.success('Report submitted');
-      }
-      queryClient.invalidateQueries({ queryKey: ['ministry-reports'] });
-      setReportModalOpen(false);
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
-
-  async function handleTaskStatusChange(task: MinistryTaskWithDetails, newStatus: TaskStatus) {
-    try {
-      await updateMinistryTask(task.id, { status: newStatus });
-      queryClient.invalidateQueries({ queryKey: ['ministry-tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['ministry-task-stats'] });
-      toast.success('Task updated');
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
-
-  async function handleDeleteTask(task: MinistryTaskWithDetails) {
-    if (!confirm(`Delete task "${task.title}"?`)) return;
-    try {
-      await deleteMinistryTask(task.id);
-      queryClient.invalidateQueries({ queryKey: ['ministry-tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['ministry-task-stats'] });
-      toast.success('Task deleted');
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
-
-  async function handleDeleteReport(report: MinistryReportWithDetails) {
-    if (!confirm(`Delete report "${report.title}"?`)) return;
-    try {
-      await deleteMinistryReport(report.id);
-      queryClient.invalidateQueries({ queryKey: ['ministry-reports'] });
-      toast.success('Report deleted');
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
-
-  const priorityColors: Record<TaskPriority, 'red' | 'amber' | 'slate'> = {
-    high: 'red',
-    medium: 'amber',
-    low: 'slate',
-  };
-
-  const statusIcons: Record<TaskStatus, any> = {
-    pending: Circle,
-    in_progress: Clock,
-    completed: CheckCircle2,
-    cancelled: AlertCircle,
-  };
+  const attendance = attendanceQuery.data;
 
   if (!userMinistry) {
     return (
       <div className="space-y-5">
-        <h1 className="text-2xl font-bold text-ink">Ministry Dashboard</h1>
+        <h1 className="text-2xl font-bold text-ink">My Ministry</h1>
         <EmptyState
           icon={Users}
           title="No ministry assigned"
-          description="You need to be assigned as a ministry leader to access this dashboard"
+          description="You need to be assigned as a ministry leader to access this page"
         />
       </div>
     );
   }
 
+  const attendanceGrowth = attendance
+    ? attendance.lastMonth > 0
+      ? ((attendance.thisMonth - attendance.lastMonth) / attendance.lastMonth) * 100
+      : 0
+    : 0;
+
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-ink">{userMinistry.name}</h1>
-        <p className="text-sm text-slate-500">Ministry Dashboard & Management</p>
-      </div>
-
-      {/* Stats */}
-      {stats && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCard label="Total Tasks" value={stats.total} icon={ListTodo} />
-          <StatCard label="Pending" value={stats.pending} icon={Circle} tone="accent" />
-          <StatCard label="In Progress" value={stats.in_progress} icon={Clock} tone="secondary" />
-          <StatCard label="Completed" value={stats.completed} icon={CheckCircle2} tone="primary" />
-          <StatCard label="High Priority" value={stats.high_priority} icon={AlertCircle} tone="accent" />
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-ink">{userMinistry.name}</h1>
+          <p className="text-sm text-slate-500">
+            {userMinistry.description || 'Ministry Overview & Management'}
+          </p>
         </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab('tasks')}
-          className={`pb-3 px-4 text-sm font-medium transition-colors border-b-2 ${
-            activeTab === 'tasks'
-              ? 'border-secondary text-secondary'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <ListTodo className="inline h-4 w-4 mr-1" />
-          Tasks ({tasks.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`pb-3 px-4 text-sm font-medium transition-colors border-b-2 ${
-            activeTab === 'reports'
-              ? 'border-secondary text-secondary'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <FileText className="inline h-4 w-4 mr-1" />
-          Reports ({reports.length})
-        </button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/leaders')}>
+            <Users className="h-4 w-4" /> Leadership Team
+          </Button>
+          <Button onClick={() => navigate('/events?action=add')}>
+            <Calendar className="h-4 w-4" /> Create Event
+          </Button>
+        </div>
       </div>
 
-      {/* Tasks Tab */}
-      {activeTab === 'tasks' && (
-        <div className="space-y-4">
-          <div className="flex justify-end">
-            <Button onClick={() => openTaskModal()}>
-              <Plus className="h-4 w-4" /> Add Task
-            </Button>
-          </div>
+      {/* Key Stats */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Total Members" value={members.length} icon={Users} tone="primary" />
+        <StatCard
+          label="Leadership Team"
+          value={leaders.length}
+          icon={Award}
+          tone="secondary"
+        />
+        <StatCard
+          label="Pending Tasks"
+          value={stats?.pending ?? 0}
+          icon={ListTodo}
+          tone="accent"
+        />
+        <StatCard
+          label="Attendance Growth"
+          value={`${attendanceGrowth > 0 ? '+' : ''}${attendanceGrowth.toFixed(0)}%`}
+          icon={TrendingUp}
+          tone={attendanceGrowth > 0 ? 'primary' : 'secondary'}
+        />
+      </div>
 
-          {tasksQuery.isLoading ? (
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Ministry Members */}
+        <Card className="lg:col-span-2">
+          <CardHeader
+            title="Ministry Members"
+            action={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => navigate(`/members?ministry=${userMinistry.id}`)}
+              >
+                View All ({members.length})
+              </Button>
+            }
+          />
+          {membersQuery.isLoading ? (
             <Spinner />
-          ) : tasks.length === 0 ? (
+          ) : members.length === 0 ? (
             <EmptyState
-              icon={ListTodo}
-              title="No tasks yet"
-              description="Create your first ministry task to get started"
+              icon={UserPlus}
+              title="No members yet"
+              description="Members will appear here when assigned to your ministry"
             />
           ) : (
-            <div className="space-y-3">
-              {tasks.map((task) => {
-                const StatusIcon = statusIcons[task.status];
-                return (
-                  <Card key={task.id}>
-                    <div className="flex items-start gap-3">
-                      <button
-                        onClick={() =>
-                          handleTaskStatusChange(
-                            task,
-                            task.status === 'completed' ? 'pending' : 'completed'
-                          )
-                        }
-                        className="mt-1"
-                      >
-                        <StatusIcon
-                          className={`h-5 w-5 ${
-                            task.status === 'completed' ? 'text-green-600' : 'text-slate-400'
-                          }`}
-                        />
-                      </button>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3
-                            className={`font-semibold text-ink ${
-                              task.status === 'completed' ? 'line-through opacity-60' : ''
-                            }`}
-                          >
-                            {task.title}
-                          </h3>
-                          <div className="flex gap-1 shrink-0">
-                            <Badge tone={priorityColors[task.priority]}>{task.priority}</Badge>
-                          </div>
-                        </div>
-
-                        {task.description && (
-                          <p className="text-sm text-slate-600 mt-1">{task.description}</p>
-                        )}
-
-                        <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-slate-500">
-                          {task.assigned_member_name && (
-                            <span className="flex items-center gap-1">
-                              <Users className="h-3 w-3" />
-                              {task.assigned_member_name}
-                            </span>
-                          )}
-                          {task.due_date && (
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              Due: {new Date(task.due_date).toLocaleDateString()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex gap-1 shrink-0">
-                        <Button variant="ghost" size="sm" onClick={() => openTaskModal(task)}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteTask(task)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
+            <div className="space-y-2">
+              {members.slice(0, 8).map((member) => (
+                <div
+                  key={member.id}
+                  onClick={() => navigate(`/members/${member.id}`)}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50 cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary-50 text-secondary font-semibold">
+                      {member.first_name[0]}
+                      {member.last_name[0]}
                     </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Reports Tab */}
-      {activeTab === 'reports' && (
-        <div className="space-y-4">
-          <div className="flex justify-end">
-            <Button onClick={() => openReportModal()}>
-              <Plus className="h-4 w-4" /> Submit Report
-            </Button>
-          </div>
-
-          {reportsQuery.isLoading ? (
-            <Spinner />
-          ) : reports.length === 0 ? (
-            <EmptyState
-              icon={FileText}
-              title="No reports yet"
-              description="Submit your first ministry report"
-            />
-          ) : (
-            <div className="space-y-3">
-              {reports.map((report) => (
-                <Card key={report.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-ink">{report.title}</h3>
-                        <Badge tone="blue">{report.report_type}</Badge>
-                        <span className="text-xs text-slate-500">{report.report_period}</span>
-                      </div>
-
-                      {report.summary && (
-                        <p className="text-sm text-slate-600 mb-2">{report.summary}</p>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        {report.attendance_count !== null && (
-                          <div>
-                            <span className="text-slate-500">Attendance:</span>{' '}
-                            <span className="font-medium">{report.attendance_count}</span>
-                          </div>
-                        )}
-                        {report.expenses !== null && (
-                          <div>
-                            <span className="text-slate-500">Expenses:</span>{' '}
-                            <span className="font-medium">GH₵{report.expenses.toFixed(2)}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <p className="text-xs text-slate-400 mt-2">
-                        Submitted: {new Date(report.submitted_at).toLocaleDateString()}
+                    <div>
+                      <p className="text-sm font-medium text-ink">
+                        {member.first_name} {member.last_name}
                       </p>
-                    </div>
-
-                    <div className="flex gap-1 shrink-0">
-                      <Button variant="ghost" size="sm" onClick={() => openReportModal(report)}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteReport(report)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      <div className="flex items-center gap-3 text-xs text-slate-500">
+                        {member.phone && (
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            {member.phone}
+                          </span>
+                        )}
+                        {member.email && (
+                          <span className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" />
+                            {member.email}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </Card>
+                  <Badge tone="slate">{member.member_code}</Badge>
+                </div>
+              ))}
+              {members.length > 8 && (
+                <p className="text-center text-sm text-slate-500 pt-2">
+                  +{members.length - 8} more members
+                </p>
+              )}
+            </div>
+          )}
+        </Card>
+
+        {/* Leadership Team */}
+        <Card>
+          <CardHeader
+            title="Leadership Team"
+            action={
+              <Button size="sm" variant="outline" onClick={() => navigate('/leaders')}>
+                Manage
+              </Button>
+            }
+          />
+          {leadersQuery.isLoading ? (
+            <Spinner />
+          ) : leaders.length === 0 ? (
+            <EmptyState
+              icon={Award}
+              title="No leaders yet"
+              description="Add deputy, secretary, and other leaders"
+            />
+          ) : (
+            <div className="space-y-3">
+              {leaders.map((leader) => (
+                <div key={leader.id} className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary text-xs font-semibold shrink-0">
+                    {leader.member_name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink truncate">
+                      {leader.member_name}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Badge tone="blue" className="text-xs">
+                        {leader.leadership_role.replace('_', ' ')}
+                      </Badge>
+                    </div>
+                    {leader.portfolio && (
+                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                        <Briefcase className="h-3 w-3" />
+                        {leader.portfolio}
+                      </p>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}
+        </Card>
+      </div>
+
+      {/* Recent Events & Quick Links */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Recent Events"
+            action={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => navigate('/events?action=add')}
+              >
+                Create Event
+              </Button>
+            }
+          />
+          {eventsQuery.isLoading ? (
+            <Spinner />
+          ) : events.length === 0 ? (
+            <EmptyState
+              icon={Calendar}
+              title="No events yet"
+              description="Create your first ministry event"
+            />
+          ) : (
+            <div className="space-y-2">
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-ink">{event.title}</p>
+                    <p className="text-xs text-slate-500">
+                      {format(new Date(event.start_time), 'MMM d, yyyy · h:mm a')}
+                    </p>
+                  </div>
+                  <Badge tone="blue">{event.status}</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader title="Quick Actions" />
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              variant="outline"
+              className="h-auto flex-col gap-2 py-4"
+              onClick={() => navigate(`/members?ministry=${userMinistry.id}`)}
+            >
+              <Users className="h-5 w-5" />
+              <span className="text-sm">View Members</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto flex-col gap-2 py-4"
+              onClick={() => navigate('/ministry-tasks')}
+            >
+              <ListTodo className="h-5 w-5" />
+              <span className="text-sm">Manage Tasks</span>
+              {stats && stats.pending > 0 && (
+                <Badge tone="amber" className="text-xs">
+                  {stats.pending} pending
+                </Badge>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto flex-col gap-2 py-4"
+              onClick={() => navigate('/ministry-reports')}
+            >
+              <FileText className="h-5 w-5" />
+              <span className="text-sm">Submit Report</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto flex-col gap-2 py-4"
+              onClick={() => navigate('/reports')}
+            >
+              <BarChart3 className="h-5 w-5" />
+              <span className="text-sm">View Analytics</span>
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      {/* Ministry Goals & Objectives */}
+      <Card>
+        <CardHeader title="Ministry Vision & Goals" />
+        <div className="prose prose-sm max-w-none">
+          {userMinistry.description ? (
+            <p className="text-slate-600">{userMinistry.description}</p>
+          ) : (
+            <EmptyState
+              icon={Target}
+              title="No vision statement"
+              description="Add a vision and goals for your ministry in the Ministries page"
+            />
+          )}
         </div>
-      )}
-
-      {/* Task Modal */}
-      <Modal
-        open={taskModalOpen}
-        onClose={() => setTaskModalOpen(false)}
-        title={editingTask ? 'Edit Task' : 'New Task'}
-      >
-        <form onSubmit={taskForm.handleSubmit(onTaskSubmit)} className="space-y-4">
-          <Input
-            label="Task Title"
-            {...taskForm.register('title')}
-            error={taskForm.formState.errors.title?.message}
-          />
-
-          <Textarea
-            label="Description"
-            rows={3}
-            {...taskForm.register('description')}
-            error={taskForm.formState.errors.description?.message}
-          />
-
-          <Select
-            label="Priority"
-            options={[
-              { value: 'high', label: 'High' },
-              { value: 'medium', label: 'Medium' },
-              { value: 'low', label: 'Low' },
-            ]}
-            {...taskForm.register('priority')}
-            error={taskForm.formState.errors.priority?.message}
-          />
-
-          <Select
-            label="Assign To"
-            options={[
-              { value: '', label: 'Unassigned' },
-              ...(membersQuery.data || []).map((m) => ({
-                value: m.id,
-                label: `${m.first_name} ${m.last_name}`,
-              })),
-            ]}
-            {...taskForm.register('assigned_to')}
-          />
-
-          <Input
-            type="date"
-            label="Due Date"
-            {...taskForm.register('due_date')}
-            error={taskForm.formState.errors.due_date?.message}
-          />
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setTaskModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={taskForm.formState.isSubmitting}>
-              {editingTask ? 'Save Changes' : 'Create Task'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Report Modal */}
-      <Modal
-        open={reportModalOpen}
-        onClose={() => setReportModalOpen(false)}
-        title={editingReport ? 'Edit Report' : 'Submit Report'}
-        size="lg"
-      >
-        <form onSubmit={reportForm.handleSubmit(onReportSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Report Type"
-              options={[
-                { value: 'monthly', label: 'Monthly' },
-                { value: 'quarterly', label: 'Quarterly' },
-                { value: 'annual', label: 'Annual' },
-                { value: 'special', label: 'Special' },
-              ]}
-              {...reportForm.register('report_type')}
-            />
-
-            <Select
-              label="Report Period"
-              options={[
-                { value: '', label: 'Select period' },
-                ...reportPeriods.map((p) => ({ value: p, label: p })),
-              ]}
-              {...reportForm.register('report_period')}
-              error={reportForm.formState.errors.report_period?.message}
-            />
-          </div>
-
-          <Input
-            label="Report Title"
-            {...reportForm.register('title')}
-            error={reportForm.formState.errors.title?.message}
-          />
-
-          <Textarea
-            label="Summary"
-            rows={2}
-            {...reportForm.register('summary')}
-          />
-
-          <Textarea
-            label="Achievements"
-            placeholder="What was accomplished this period?"
-            rows={3}
-            {...reportForm.register('achievements')}
-          />
-
-          <Textarea
-            label="Challenges"
-            placeholder="What challenges were faced?"
-            rows={3}
-            {...reportForm.register('challenges')}
-          />
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              type="number"
-              label="Attendance Count"
-              {...reportForm.register('attendance_count')}
-            />
-
-            <Input
-              type="number"
-              step="0.01"
-              label="Expenses (GH₵)"
-              {...reportForm.register('expenses')}
-            />
-          </div>
-
-          <Textarea
-            label="Future Plans"
-            placeholder="Plans for next period"
-            rows={3}
-            {...reportForm.register('future_plans')}
-          />
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setReportModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={reportForm.formState.isSubmitting}>
-              {editingReport ? 'Save Changes' : 'Submit Report'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      </Card>
     </div>
   );
 }
