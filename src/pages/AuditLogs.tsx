@@ -65,7 +65,8 @@ export function AuditLogs() {
 
     setDeleting(true);
     try {
-      const { error } = await supabase.from('audit_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      // Delete all records by using gt('id', '') which matches all non-null IDs
+      const { error } = await supabase.from('audit_logs').delete().not('id', 'is', null);
       
       if (error) throw error;
 
