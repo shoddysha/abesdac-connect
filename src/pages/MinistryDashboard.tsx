@@ -75,8 +75,8 @@ export function MinistryDashboard() {
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .or(`ministry_id.eq.${userMinistry.id},created_by_role.eq.ministry_leader`)
-        .order('start_time', { ascending: false })
+        .eq('ministry_id', userMinistry.id)
+        .order('created_at', { ascending: false })
         .limit(5);
       if (error) throw error;
       return data || [];
@@ -204,7 +204,7 @@ export function MinistryDashboard() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => navigate(`/members?ministry=${userMinistry.id}`)}
+                onClick={() => navigate(`/members?ministry_id=${userMinistry.id}`)}
               >
                 View All ({members.length})
               </Button>
@@ -363,7 +363,7 @@ export function MinistryDashboard() {
             <Button
               variant="outline"
               className="h-auto flex-col gap-2 py-4"
-              onClick={() => navigate(`/members?ministry=${userMinistry.id}`)}
+              onClick={() => navigate(`/members?ministry_id=${userMinistry.id}`)}
             >
               <Users className="h-5 w-5" />
               <span className="text-sm">View Members</span>

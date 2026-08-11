@@ -25,6 +25,7 @@ import { AuditLogs } from '@/pages/AuditLogs';
 import { MinistryDashboard } from '@/pages/MinistryDashboard';
 import { MinistryTasks } from '@/pages/MinistryTasks';
 import { MinistryReports } from '@/pages/MinistryReports';
+import { AllMinistryReports } from '@/pages/AllMinistryReports';
 
 export function App() {
   return (
@@ -107,6 +108,14 @@ export function App() {
               element={
                 <ProtectedRoute roles={['administrator']}>
                   <Users />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/all-ministry-reports"
+              element={
+                <ProtectedRoute roles={['administrator', 'secretary']}>
+                  <AllMinistryReports />
                 </ProtectedRoute>
               }
             />

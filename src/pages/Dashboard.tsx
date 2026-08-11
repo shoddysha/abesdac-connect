@@ -7,6 +7,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { useAuth } from '@/contexts/AuthContext';
 import { fetchMemberStats } from '@/services/members';
 import { fetchEvents } from '@/services/events';
 import { fetchAuditLogs } from '@/services/audit';
@@ -18,6 +19,8 @@ import { format, isFuture, formatDistanceToNow } from 'date-fns';
 const GENDER_COLORS = ['#1E5EFF', '#D4A76A'];
 
 export function Dashboard() {
+  const { hasRole } = useAuth();
+  
   const statsQuery = useQuery({ queryKey: ['member-stats'], queryFn: fetchMemberStats });
   const eventsQuery = useQuery({ queryKey: ['events'], queryFn: fetchEvents });
   const logsQuery = useQuery({ queryKey: ['audit-logs', 'recent'], queryFn: () => fetchAuditLogs(8) });
@@ -133,7 +136,16 @@ export function Dashboard() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Recent activity" />
+          <CardHeader 
+            title="Recent activity" 
+            action={
+              hasRole('administrator', 'secretary') ? (
+                <Link to="/audit-logs" className="text-sm font-medium text-secondary hover:underline">
+                  View all
+                </Link>
+              ) : undefined
+            }
+          />
           {logsQuery.isLoading ? (
             <Spinner />
           ) : logsQuery.data && logsQuery.data.length > 0 ? (
