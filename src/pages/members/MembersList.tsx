@@ -94,16 +94,16 @@ export function MembersList() {
         {canManage && (
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => exportToCSV('members', exportRows())}>
-              <Download className="h-4 w-4" /> <span className="hidden sm:inline">CSV</span>
+              <Download className="h-4 w-4" /> CSV
             </Button>
             <Button variant="outline" onClick={() => exportToExcel('members', exportRows())}>
-              <Download className="h-4 w-4" /> <span className="hidden sm:inline">Excel</span>
+              <Download className="h-4 w-4" /> Excel
             </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Import</span>
+              <Upload className="h-4 w-4" /> Import
             </Button>
             <Button onClick={() => setFormOpen(true)}>
-              <UserPlus className="h-4 w-4" /> <span className="hidden sm:inline">Add member</span>
+              <UserPlus className="h-4 w-4" /> Add member
             </Button>
           </div>
         )}

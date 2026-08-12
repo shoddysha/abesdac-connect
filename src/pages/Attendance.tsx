@@ -123,7 +123,7 @@ export function Attendance() {
         <div className="flex flex-wrap gap-2">
           {canManage && presentCount > 0 && (
             <Button variant="outline" onClick={exportToCSV}>
-              <Download className="h-4 w-4" /> <span className="hidden sm:inline">Export CSV</span>
+              <Download className="h-4 w-4" /> Export CSV
             </Button>
           )}
           {canManage && (
@@ -132,7 +132,7 @@ export function Attendance() {
               onClick={() => setQrModalOpen(true)}
               disabled={attendanceType === 'event' && !eventId}
             >
-              <QrCode className="h-4 w-4" /> <span className="hidden sm:inline">QR check-in</span>
+              <QrCode className="h-4 w-4" /> QR check-in
             </Button>
           )}
         </div>

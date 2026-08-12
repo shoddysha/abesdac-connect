@@ -44,19 +44,22 @@ export function MinistryDashboard() {
 
   const userMinistry = ministriesQuery.data?.find((m) => m.leader_id === profile?.id);
 
-  // Fetch ministry members
+  // Fetch ministry members (including members in other ministries but also in this one)
   const membersQuery = useQuery({
     queryKey: ['ministry-members', userMinistry?.id],
     queryFn: async () => {
       if (!userMinistry) return [];
       const { data, error } = await supabase
-        .from('members')
-        .select('*')
+        .from('ministry_members')
+        .select('members(*)')
         .eq('ministry_id', userMinistry.id)
-        .eq('status', 'active')
-        .order('first_name');
+        .order('created_at', { ascending: true });
       if (error) throw error;
-      return data || [];
+      // Extract members and filter by active status
+      return (data ?? [])
+        .map((row: any) => row.members)
+        .filter((m: any) => m && m.status === 'active')
+        .sort((a: any, b: any) => a.first_name.localeCompare(b.first_name));
     },
     enabled: !!userMinistry,
   });
@@ -91,7 +94,22 @@ export function MinistryDashboard() {
     enabled: !!userMinistry,
   });
 
-  // Fetch ministry attendance stats
+  // Fetch recent activity for this ministry
+  const activityQuery = useQuery({
+    queryKey: ['ministry-activity', userMinistry?.id],
+    queryFn: async () => {
+      if (!userMinistry) return [];
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .or(`module.eq.ministries,module.eq.ministry_tasks,module.eq.ministry_reports,module.eq.member_followups,module.eq.events`)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!userMinistry,
+  });
   const attendanceQuery = useQuery({
     queryKey: ['ministry-attendance', userMinistry?.id],
     queryFn: async () => {
@@ -126,6 +144,7 @@ export function MinistryDashboard() {
   useRealtimeQuery('ministry_leaders', ['ministry-leaders']);
   useRealtimeQuery('events', ['ministry-events', userMinistry?.id]);
   useRealtimeQuery('ministry_tasks', ['ministry-task-stats', userMinistry?.id]);
+  useRealtimeQuery('audit_logs', ['ministry-activity', userMinistry?.id]);
 
   const members = membersQuery.data ?? [];
   const leaders = (leadersQuery.data ?? []).filter((l) => l.ministry_id === userMinistry?.id);
@@ -164,10 +183,10 @@ export function MinistryDashboard() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => navigate('/leaders')}>
-            <Users className="h-4 w-4" /> <span className="hidden sm:inline">Leadership Team</span>
+            <Users className="h-4 w-4" /> Leadership Team
           </Button>
           <Button onClick={() => navigate('/events?action=add')}>
-            <Calendar className="h-4 w-4" /> <span className="hidden sm:inline">Create Event</span>
+            <Calendar className="h-4 w-4" /> Create Event
           </Button>
         </div>
       </div>
@@ -400,6 +419,34 @@ export function MinistryDashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Recent Activity */}
+      <Card>
+        <CardHeader title="Recent Activity" />
+        {activityQuery.isLoading ? (
+          <Spinner />
+        ) : activityQuery.data && activityQuery.data.length > 0 ? (
+          <div className="space-y-3">
+            {activityQuery.data.map((log: any) => (
+              <div key={log.id} className="flex items-start gap-3 text-sm">
+                <Activity className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
+                <p className="text-ink break-words">
+                  <span className="font-medium">{log.user_name ?? 'System'}</span> {log.description}
+                  <span className="ml-2 text-xs text-slate-400 whitespace-nowrap">
+                    {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                  </span>
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={Activity}
+            title="No recent activity"
+            description="Recent ministry activities will appear here"
+          />
+        )}
+      </Card>
 
       {/* Ministry Goals & Objectives */}
       <Card>

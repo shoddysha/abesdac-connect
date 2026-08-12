@@ -126,7 +126,7 @@ export function Announcements() {
         </div>
         {canCreate && (
           <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">New announcement</span>
+            <Plus className="h-4 w-4" /> New announcement
           </Button>
         )}
       </div>

@@ -218,7 +218,7 @@ export function Leaders() {
         <div className="flex flex-wrap gap-2">
           {canExport && (
             <Button variant="outline" onClick={handleExport}>
-              <Download className="h-4 w-4" /> <span className="hidden sm:inline">Export</span>
+              <Download className="h-4 w-4" /> Export
             </Button>
           )}
           <Button
@@ -226,18 +226,18 @@ export function Leaders() {
             onClick={() => setGroupBy(groupBy === 'ministry' ? 'none' : 'ministry')}
           >
             <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">{groupBy === 'ministry' ? 'Ungroup' : 'Group by Ministry'}</span>
+            {groupBy === 'ministry' ? 'Ungroup' : 'Group by Ministry'}
           </Button>
           <Button
             variant="outline"
             onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
           >
             {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid3x3 className="h-4 w-4" />}
-            <span className="hidden sm:inline">{viewMode === 'grid' ? 'List' : 'Grid'}</span>
+            {viewMode === 'grid' ? 'List' : 'Grid'}
           </Button>
           {canEdit && (
             <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Add Leader</span>
+              <Plus className="h-4 w-4" /> Add Leader
             </Button>
           )}
         </div>

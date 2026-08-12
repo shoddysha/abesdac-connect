@@ -86,6 +86,7 @@ export function Ministries() {
   });
   useRealtimeQuery('ministries', ['ministries']);
   useRealtimeQuery('ministry_members', ['ministry-member-counts']);
+  useRealtimeQuery('profiles', ['ministries']); // When a profile (leader) changes, also invalidate ministries
 
   // A Ministry Leader manages exactly the one ministry they lead —
   // identified by ministries.leader_id pointing at their own profile.
@@ -200,7 +201,7 @@ export function Ministries() {
         </div>
         {canManage && (
           <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">New ministry</span>
+            <Plus className="h-4 w-4" /> New ministry
           </Button>
         )}
       </div>

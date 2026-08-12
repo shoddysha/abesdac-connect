@@ -170,7 +170,7 @@ export function Events() {
         </div>
         {canCreate && (
           <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Create event</span>
+            <Plus className="h-4 w-4" /> Create event
           </Button>
         )}
       </div>

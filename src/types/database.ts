@@ -24,6 +24,9 @@ export interface Profile {
   role: UserRole;
   avatar_url: string | null;
   is_active: boolean;
+  notification_preferences: NotificationPreferences | null;
+  display_preferences: DisplayPreferences | null;
+  updated_preferences_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -250,6 +253,54 @@ export interface MinistryReport {
   future_plans: string | null;
   submitted_by: string | null;
   submitted_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Member Follow-up Types
+export type FollowUpType = 'pastoral_care' | 'new_member' | 'inactive' | 'sick_visit' | 'prayer_request' | 'other';
+export type FollowUpPriority = 'low' | 'medium' | 'high';
+
+export interface MemberFollowUp {
+  id: string;
+  ministry_id: string;
+  member_id: string;
+  follow_up_type: FollowUpType;
+  description: string;
+  priority: FollowUpPriority;
+  follow_up_date: string;
+  completed_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// User Preferences Types
+export interface NotificationPreferences {
+  task_assigned: boolean;
+  task_completed: boolean;
+  report_due: boolean;
+  report_submitted: boolean;
+  event_reminder: boolean;
+  birthday_reminder: boolean;
+  member_followup: boolean;
+  ministry_update: boolean;
+}
+
+export interface DisplayPreferences {
+  theme: 'light' | 'dark';
+  items_per_page: number;
+  date_format: string;
+}
+
+export interface MinistryPreferences {
+  id: string;
+  ministry_id: string;
+  leader_id: string;
+  allow_member_followups: boolean;
+  weekly_report_enabled: boolean;
+  attendance_tracking_enabled: boolean;
+  task_notifications_enabled: boolean;
   created_at: string;
   updated_at: string;
 }

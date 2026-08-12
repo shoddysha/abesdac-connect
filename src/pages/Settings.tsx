@@ -1,11 +1,11 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useState, type ChangeEvent } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, type ChangeEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { KeyRound, User, Database, Bell, Clock, Shield } from 'lucide-react';
+import { KeyRound, User, Database, Bell, Clock, Shield, Palette, Download } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,8 @@ import { updateProfileDetails } from '@/services/users';
 import { uploadAvatar } from '@/services/storage';
 import { generateFullBackup, downloadBackupFile } from '@/services/backup';
 import { RestoreBackupModal } from '@/features/backup/RestoreBackupModal';
+import { supabase } from '@/lib/supabase';
+import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 
 
 const profileSchema = z.object({
@@ -40,7 +42,51 @@ export function Settings() {
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
   
-  // Notification settings state (load from localStorage)
+  // Fetch user preferences from database with real-time updates
+  const preferencesQuery = useQuery({
+    queryKey: ['user-preferences', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('notification_preferences, display_preferences')
+        .eq('id', profile.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!profile?.id,
+  });
+
+  useRealtimeQuery('profiles', ['user-preferences', profile?.id]);
+
+  // Initialize preferences state from database
+  const [notificationPrefs, setNotificationPrefs] = useState({
+    task_assigned: true,
+    task_completed: true,
+    report_due: true,
+    report_submitted: true,
+    event_reminder: true,
+    birthday_reminder: true,
+    member_followup: true,
+    ministry_update: true,
+  });
+
+  const [displayPrefs, setDisplayPrefs] = useState({
+    theme: 'light',
+    items_per_page: 10,
+    date_format: 'MMM d, yyyy',
+  });
+
+  // Update state when preferences load from database
+  useEffect(() => {
+    if (preferencesQuery.data) {
+      setNotificationPrefs(preferencesQuery.data.notification_preferences || notificationPrefs);
+      setDisplayPrefs(preferencesQuery.data.display_preferences || displayPrefs);
+    }
+  }, [preferencesQuery.data]);
+  
+  // Legacy localStorage settings for backward compatibility (admin only)
   const [birthdaySmsEnabled, setBirthdaySmsEnabled] = useState(() => {
     const saved = localStorage.getItem('notif_birthday_sms');
     return saved ? saved === 'true' : true;
@@ -144,6 +190,79 @@ export function Settings() {
     toast.success(`Session timeout updated to ${timeout} minutes. Changes take effect on next login.`);
   }
 
+  async function updateNotificationPreference(key: string, value: boolean) {
+    if (!profile?.id) return;
+    const updated = { ...notificationPrefs, [key]: value };
+    setNotificationPrefs(updated);
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          notification_preferences: updated,
+          updated_preferences_at: new Date().toISOString()
+        })
+        .eq('id', profile.id);
+      
+      if (error) throw error;
+      toast.success('Notification preference updated');
+      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
+    } catch (err) {
+      toast.error((err as Error).message);
+      // Revert on error
+      setNotificationPrefs(notificationPrefs);
+    }
+  }
+
+  async function updateDisplayPreference(key: string, value: any) {
+    if (!profile?.id) return;
+    const updated = { ...displayPrefs, [key]: value };
+    setDisplayPrefs(updated);
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          display_preferences: updated,
+          updated_preferences_at: new Date().toISOString()
+        })
+        .eq('id', profile.id);
+      
+      if (error) throw error;
+      toast.success('Display preference updated');
+      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
+    } catch (err) {
+      toast.error((err as Error).message);
+      // Revert on error
+      setDisplayPrefs(displayPrefs);
+    }
+  }
+
+  async function downloadMyData() {
+    if (!profile?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', profile.id)
+        .single();
+      
+      if (error) throw error;
+      
+      const dataStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `my-profile-data-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Profile data downloaded');
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   function viewAuditLogs() {
     navigate('/audit-logs');
   }
@@ -219,6 +338,172 @@ export function Settings() {
       )}
 
       <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />
+
+      {/* Notification Preferences - Available to all users */}
+      <Card>
+        <CardHeader title="Notification preferences" action={<Bell className="h-4 w-4 text-slate-400" />} />
+        <p className="mb-4 text-sm text-slate-500">
+          Choose which notifications you want to receive
+        </p>
+        <div className="space-y-3">
+          {hasRole('ministry_leader') && (
+            <>
+              <label className="flex items-center justify-between cursor-pointer group">
+                <div>
+                  <span className="text-sm text-ink font-medium">Task assignments</span>
+                  <p className="text-xs text-slate-500">Get notified when you're assigned a task</p>
+                </div>
+                <input 
+                  type="checkbox" 
+                  className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
+                  checked={notificationPrefs.task_assigned}
+                  onChange={(e) => updateNotificationPreference('task_assigned', e.target.checked)}
+                />
+              </label>
+              <label className="flex items-center justify-between cursor-pointer group">
+                <div>
+                  <span className="text-sm text-ink font-medium">Task completions</span>
+                  <p className="text-xs text-slate-500">Get notified when tasks are completed</p>
+                </div>
+                <input 
+                  type="checkbox" 
+                  className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
+                  checked={notificationPrefs.task_completed}
+                  onChange={(e) => updateNotificationPreference('task_completed', e.target.checked)}
+                />
+              </label>
+              <label className="flex items-center justify-between cursor-pointer group">
+                <div>
+                  <span className="text-sm text-ink font-medium">Report due reminders</span>
+                  <p className="text-xs text-slate-500">Remind me when reports are due</p>
+                </div>
+                <input 
+                  type="checkbox" 
+                  className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
+                  checked={notificationPrefs.report_due}
+                  onChange={(e) => updateNotificationPreference('report_due', e.target.checked)}
+                />
+              </label>
+              <label className="flex items-center justify-between cursor-pointer group">
+                <div>
+                  <span className="text-sm text-ink font-medium">Member follow-ups</span>
+                  <p className="text-xs text-slate-500">Notify when follow-ups are due</p>
+                </div>
+                <input 
+                  type="checkbox" 
+                  className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
+                  checked={notificationPrefs.member_followup}
+                  onChange={(e) => updateNotificationPreference('member_followup', e.target.checked)}
+                />
+              </label>
+            </>
+          )}
+          <label className="flex items-center justify-between cursor-pointer group">
+            <div>
+              <span className="text-sm text-ink font-medium">Event reminders</span>
+              <p className="text-xs text-slate-500">Get notified about upcoming events</p>
+            </div>
+            <input 
+              type="checkbox" 
+              className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
+              checked={notificationPrefs.event_reminder}
+              onChange={(e) => updateNotificationPreference('event_reminder', e.target.checked)}
+            />
+          </label>
+          <label className="flex items-center justify-between cursor-pointer group">
+            <div>
+              <span className="text-sm text-ink font-medium">Birthday reminders</span>
+              <p className="text-xs text-slate-500">Get notified about member birthdays</p>
+            </div>
+            <input 
+              type="checkbox" 
+              className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
+              checked={notificationPrefs.birthday_reminder}
+              onChange={(e) => updateNotificationPreference('birthday_reminder', e.target.checked)}
+            />
+          </label>
+          {hasRole('administrator', 'secretary', 'ministry_leader') && (
+            <label className="flex items-center justify-between cursor-pointer group">
+              <div>
+                <span className="text-sm text-ink font-medium">Ministry updates</span>
+                <p className="text-xs text-slate-500">Get notified about ministry changes</p>
+              </div>
+              <input 
+                type="checkbox" 
+                className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
+                checked={notificationPrefs.ministry_update}
+                onChange={(e) => updateNotificationPreference('ministry_update', e.target.checked)}
+              />
+            </label>
+          )}
+        </div>
+      </Card>
+
+      {/* Display Preferences - Available to all users */}
+      <Card>
+        <CardHeader title="Display preferences" action={<Palette className="h-4 w-4 text-slate-400" />} />
+        <p className="mb-4 text-sm text-slate-500">
+          Customize how information is displayed
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-ink mb-2">Items per page</label>
+            <select
+              value={displayPrefs.items_per_page}
+              onChange={(e) => updateDisplayPreference('items_per_page', parseInt(e.target.value))}
+              className="w-full sm:w-auto px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-secondary focus:ring-2 focus:ring-secondary-50 bg-white"
+            >
+              <option value={5}>5 items</option>
+              <option value={10}>10 items</option>
+              <option value={25}>25 items</option>
+              <option value={50}>50 items</option>
+              <option value={100}>100 items</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-2">Date format</label>
+            <select
+              value={displayPrefs.date_format}
+              onChange={(e) => updateDisplayPreference('date_format', e.target.value)}
+              className="w-full sm:w-auto px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-secondary focus:ring-2 focus:ring-secondary-50 bg-white"
+            >
+              <option value="MMM d, yyyy">Jan 15, 2024</option>
+              <option value="dd/MM/yyyy">15/01/2024</option>
+              <option value="MM/dd/yyyy">01/15/2024</option>
+              <option value="yyyy-MM-dd">2024-01-15</option>
+            </select>
+          </div>
+        </div>
+      </Card>
+
+      {/* Data & Privacy - Available to all users */}
+      <Card>
+        <CardHeader title="Data & privacy" action={<Download className="h-4 w-4 text-slate-400" />} />
+        <p className="mb-4 text-sm text-slate-500">
+          Download your personal data and manage privacy settings
+        </p>
+        <Button variant="outline" onClick={downloadMyData}>
+          Download my data
+        </Button>
+      </Card>
+
+      {hasRole('administrator', 'secretary') && (
+        <Card>
+          <CardHeader title="Backup & Restore" action={<Database className="h-4 w-4 text-slate-400" />} />
+          <p className="mb-4 text-sm text-slate-500">
+            Download a complete snapshot of every member, ministry, attendance record, event, announcement, user, and
+            audit log as one JSON file — useful to keep a periodic copy outside the app.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleBackup} isLoading={backupLoading}>
+              Download full backup
+            </Button>
+            <Button variant="outline" onClick={() => setRestoreOpen(true)}>
+              Restore from backup
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {hasRole('administrator') && (
         <Card>
