@@ -163,14 +163,14 @@ export function Events() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Events</h1>
           <p className="text-sm text-slate-500">Plan and track church events.</p>
         </div>
         {canCreate && (
           <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> Create event
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Create event</span>
           </Button>
         )}
       </div>
@@ -224,18 +224,18 @@ export function Events() {
         <div className="space-y-3">
           {visibleEvents.map((event) => (
             <Card key={event.id}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-ink">{event.title}</h3>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-semibold text-ink truncate">{event.title}</h3>
                     <Badge tone={statusTone(event.status)}>{event.status}</Badge>
                   </div>
-                  {event.description && <p className="mt-1 text-sm text-slate-500">{event.description}</p>}
-                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-500">
-                    <span>{format(new Date(event.start_time), 'EEE, MMM d, yyyy · h:mm a')}</span>
+                  {event.description && <p className="mt-1 text-sm text-slate-500 line-clamp-2">{event.description}</p>}
+                  <div className="mt-2 flex flex-wrap gap-3 sm:gap-4 text-xs text-slate-500">
+                    <span className="whitespace-nowrap">{format(new Date(event.start_time), 'EEE, MMM d, yyyy · h:mm a')}</span>
                     {event.location && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" /> {event.location}
+                      <span className="flex items-center gap-1 truncate">
+                        <MapPin className="h-3 w-3 shrink-0" /> <span className="truncate">{event.location}</span>
                       </span>
                     )}
                   </div>
@@ -268,7 +268,7 @@ export function Events() {
           <Input label="Title" {...register('title')} error={errors.title?.message} />
           <Textarea label="Description" {...register('description')} />
           <Input label="Location" {...register('location')} />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Start" type="datetime-local" {...register('start_time')} error={errors.start_time?.message} />
             <Input label="End (optional)" type="datetime-local" {...register('end_time')} />
           </div>
@@ -302,11 +302,11 @@ export function Events() {
             </label>
           )}
           
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button type="submit" isLoading={isSubmitting}>
+            <Button type="submit" isLoading={isSubmitting} className="w-full sm:w-auto">
               {editingId ? 'Save changes' : 'Create event'}
             </Button>
           </div>

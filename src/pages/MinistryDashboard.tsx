@@ -155,19 +155,19 @@ export function MinistryDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">{userMinistry.name}</h1>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold text-ink truncate">{userMinistry.name}</h1>
           <p className="text-sm text-slate-500">
             {userMinistry.description || 'Ministry Overview & Management'}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => navigate('/leaders')}>
-            <Users className="h-4 w-4" /> Leadership Team
+            <Users className="h-4 w-4" /> <span className="hidden sm:inline">Leadership Team</span>
           </Button>
           <Button onClick={() => navigate('/events?action=add')}>
-            <Calendar className="h-4 w-4" /> Create Event
+            <Calendar className="h-4 w-4" /> <span className="hidden sm:inline">Create Event</span>
           </Button>
         </div>
       </div>
@@ -224,28 +224,28 @@ export function MinistryDashboard() {
                 <div
                   key={member.id}
                   onClick={() => navigate(`/members/${member.id}`)}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50 cursor-pointer"
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0 sm:justify-between rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50 cursor-pointer"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary-50 text-secondary font-semibold">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary-50 text-secondary font-semibold shrink-0">
                       {member.first_name[0]}
                       {member.last_name[0]}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-ink">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-ink truncate">
                         {member.first_name} {member.last_name}
                       </p>
-                      <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-500">
                         {member.phone && (
-                          <span className="flex items-center gap-1">
-                            <Phone className="h-3 w-3" />
-                            {member.phone}
+                          <span className="flex items-center gap-1 truncate">
+                            <Phone className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{member.phone}</span>
                           </span>
                         )}
                         {member.email && (
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" />
-                            {member.email}
+                          <span className="flex items-center gap-1 truncate">
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{member.email}</span>
                           </span>
                         )}
                       </div>
@@ -301,9 +301,9 @@ export function MinistryDashboard() {
                       </Badge>
                     </div>
                     {leader.portfolio && (
-                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                        <Briefcase className="h-3 w-3" />
-                        {leader.portfolio}
+                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 truncate">
+                        <Briefcase className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{leader.portfolio}</span>
                       </p>
                     )}
                   </div>
@@ -342,11 +342,11 @@ export function MinistryDashboard() {
               {events.map((event) => (
                 <div
                   key={event.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5"
+                  className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0 sm:justify-between rounded-lg border border-slate-100 px-3 py-2.5"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-ink">{event.title}</p>
-                    <p className="text-xs text-slate-500">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-ink truncate">{event.title}</p>
+                    <p className="text-xs text-slate-500 truncate">
                       {format(new Date(event.start_time), 'MMM d, yyyy · h:mm a')}
                     </p>
                   </div>
@@ -359,14 +359,14 @@ export function MinistryDashboard() {
 
         <Card>
           <CardHeader title="Quick Actions" />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Button
               variant="outline"
               className="h-auto flex-col gap-2 py-4"
               onClick={() => navigate(`/members?ministry_id=${userMinistry.id}`)}
             >
               <Users className="h-5 w-5" />
-              <span className="text-sm">View Members</span>
+              <span className="text-sm text-center">View Members</span>
             </Button>
             <Button
               variant="outline"
@@ -374,7 +374,7 @@ export function MinistryDashboard() {
               onClick={() => navigate('/ministry-tasks')}
             >
               <ListTodo className="h-5 w-5" />
-              <span className="text-sm">Manage Tasks</span>
+              <span className="text-sm text-center">Manage Tasks</span>
               {stats && stats.pending > 0 && (
                 <Badge tone="amber">
                   {stats.pending} pending
@@ -387,7 +387,7 @@ export function MinistryDashboard() {
               onClick={() => navigate('/ministry-reports')}
             >
               <FileText className="h-5 w-5" />
-              <span className="text-sm">Submit Report</span>
+              <span className="text-sm text-center">Submit Report</span>
             </Button>
             <Button
               variant="outline"
@@ -395,7 +395,7 @@ export function MinistryDashboard() {
               onClick={() => navigate('/reports')}
             >
               <BarChart3 className="h-5 w-5" />
-              <span className="text-sm">View Analytics</span>
+              <span className="text-sm text-center">View Analytics</span>
             </Button>
           </div>
         </Card>

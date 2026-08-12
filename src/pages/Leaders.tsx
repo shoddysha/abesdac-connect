@@ -208,17 +208,17 @@ export function Leaders() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Ministry Leaders</h1>
           <p className="text-sm text-slate-500">
             Leadership teams for each ministry department
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {canExport && (
             <Button variant="outline" onClick={handleExport}>
-              <Download className="h-4 w-4" /> Export
+              <Download className="h-4 w-4" /> <span className="hidden sm:inline">Export</span>
             </Button>
           )}
           <Button
@@ -226,18 +226,18 @@ export function Leaders() {
             onClick={() => setGroupBy(groupBy === 'ministry' ? 'none' : 'ministry')}
           >
             <Users className="h-4 w-4" />
-            {groupBy === 'ministry' ? 'Ungroup' : 'Group by Ministry'}
+            <span className="hidden sm:inline">{groupBy === 'ministry' ? 'Ungroup' : 'Group by Ministry'}</span>
           </Button>
           <Button
             variant="outline"
             onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
           >
             {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid3x3 className="h-4 w-4" />}
-            {viewMode === 'grid' ? 'List' : 'Grid'}
+            <span className="hidden sm:inline">{viewMode === 'grid' ? 'List' : 'Grid'}</span>
           </Button>
           {canEdit && (
             <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" /> Add Leader
+              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Add Leader</span>
             </Button>
           )}
         </div>
@@ -383,7 +383,7 @@ export function Leaders() {
             error={errors.bio?.message}
           />
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
             <Button
               type="button"
               variant="outline"
@@ -391,10 +391,11 @@ export function Leaders() {
                 setFormOpen(false);
                 setEditingLeader(null);
               }}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
-            <Button type="submit" isLoading={isSubmitting}>
+            <Button type="submit" isLoading={isSubmitting} className="w-full sm:w-auto">
               {editingLeader ? 'Save Changes' : 'Add Leader'}
             </Button>
           </div>
@@ -421,14 +422,14 @@ function LeaderCard({
   return (
     <Card className="hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-2">
-        <div>
+        <div className="flex-1 min-w-0">
           <Badge tone={getRoleBadgeTone(leader.leadership_role)}>
             {getLeadershipRoleLabel(leader.leadership_role)}
           </Badge>
-          <p className="text-xs text-slate-500 mt-1">{leader.ministry_name}</p>
+          <p className="text-xs text-slate-500 mt-1 truncate">{leader.ministry_name}</p>
         </div>
         {canEdit && (
-          <div className="flex gap-1">
+          <div className="flex gap-1 ml-2">
             <Button variant="ghost" size="sm" onClick={() => onEdit(leader)}>
               <Pencil className="h-3 w-3" />
             </Button>
@@ -439,13 +440,13 @@ function LeaderCard({
         )}
       </div>
 
-      <h3 className="font-semibold text-ink mb-1">{leader.member_name}</h3>
+      <h3 className="font-semibold text-ink mb-1 truncate">{leader.member_name}</h3>
       <p className="text-xs text-slate-500 mb-2">{leader.member_code}</p>
 
       {leader.portfolio && (
-        <p className="text-sm text-accent font-medium flex items-center gap-1 mb-2">
-          <Briefcase className="h-3 w-3" />
-          {leader.portfolio}
+        <p className="text-sm text-accent font-medium flex items-center gap-1 mb-2 truncate">
+          <Briefcase className="h-3 w-3 shrink-0" />
+          <span className="truncate">{leader.portfolio}</span>
         </p>
       )}
 
@@ -458,15 +459,15 @@ function LeaderCard({
       <div className="space-y-1 border-t border-slate-100 pt-2">
         {leader.member_phone && (
           <div className="flex items-center gap-2 text-sm text-slate-600">
-            <Phone className="h-3 w-3 text-slate-400" />
-            <a href={`tel:${leader.member_phone}`} className="hover:text-secondary">
+            <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+            <a href={`tel:${leader.member_phone}`} className="hover:text-secondary truncate">
               {leader.member_phone}
             </a>
           </div>
         )}
         {leader.member_email && (
           <div className="flex items-center gap-2 text-sm text-slate-600">
-            <Mail className="h-3 w-3 text-slate-400" />
+            <Mail className="h-3 w-3 text-slate-400 shrink-0" />
             <a href={`mailto:${leader.member_email}`} className="hover:text-secondary truncate">
               {leader.member_email}
             </a>
@@ -493,22 +494,22 @@ function LeaderListItem({
 }) {
   return (
     <Card className="hover:shadow-md transition-shadow">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-5 gap-3">
-          <div>
-            <p className="font-semibold text-ink">{leader.member_name}</p>
+          <div className="min-w-0">
+            <p className="font-semibold text-ink truncate">{leader.member_name}</p>
             <p className="text-xs text-slate-500">{leader.member_code}</p>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-slate-500">Ministry</p>
-            <p className="text-sm text-slate-700">{leader.ministry_name}</p>
+            <p className="text-sm text-slate-700 truncate">{leader.ministry_name}</p>
           </div>
           <div>
             <Badge tone={getRoleBadgeTone(leader.leadership_role)}>
               {getLeadershipRoleLabel(leader.leadership_role)}
             </Badge>
           </div>
-          <div>
+          <div className="min-w-0">
             {leader.portfolio && (
               <>
                 <p className="text-xs text-slate-500">Portfolio</p>
@@ -516,9 +517,9 @@ function LeaderListItem({
               </>
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             {leader.member_phone && (
-              <a href={`tel:${leader.member_phone}`} className="text-sm text-slate-700 hover:text-secondary">
+              <a href={`tel:${leader.member_phone}`} className="text-sm text-slate-700 hover:text-secondary truncate block">
                 {leader.member_phone}
               </a>
             )}
@@ -526,7 +527,7 @@ function LeaderListItem({
         </div>
 
         {canEdit && (
-          <div className="flex gap-1 shrink-0">
+          <div className="flex gap-1 shrink-0 self-start sm:self-center">
             <Button variant="ghost" size="sm" onClick={() => onEdit(leader)}>
               <Pencil className="h-3 w-3" />
             </Button>

@@ -193,14 +193,14 @@ export function Ministries() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Ministries/Departments</h1>
           <p className="text-sm text-slate-500">Manage church ministries, leaders, and members.</p>
         </div>
         {canManage && (
           <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> New ministry
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">New ministry</span>
           </Button>
         )}
       </div>
@@ -215,8 +215,8 @@ export function Ministries() {
             const canManageThis = canManageMinistry(ministry);
             return (
               <Card key={ministry.id}>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
                     {/* MINISTRY LOGO (card view) — falls back to the generic icon when no logo_url is set */}
                     {ministry.logo_url ? (
                       <img
@@ -229,23 +229,23 @@ export function Ministries() {
                         <HeartHandshake className="h-5 w-5 text-accent" />
                       </div>
                     )}
-                    <div>
-                      <h3 className="font-semibold text-ink">{ministry.name}</h3>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-ink truncate">{ministry.name}</h3>
                       <p className="mt-1 line-clamp-2 text-sm text-slate-500">{ministry.description || 'No description'}</p>
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                  <span>Leader: {ministry.profiles?.full_name ?? 'Unassigned'}</span>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                  <span className="truncate">Leader: {ministry.profiles?.full_name ?? 'Unassigned'}</span>
                   {/* MEMBER COUNT — pulled from ministry_members via fetchMinistryMemberCounts() */}
-                  <span className="flex items-center gap-1 font-medium text-ink">
+                  <span className="flex items-center gap-1 font-medium text-ink whitespace-nowrap">
                     <Users className="h-3.5 w-3.5 text-slate-400" />
                     {memberCountsQuery.data?.[ministry.id] ?? 0}
                   </span>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                   <Button variant="ghost" size="sm" onClick={() => setMembersModalId(ministry.id)}>
-                    <UserPlus className="h-3.5 w-3.5" /> Members
+                    <UserPlus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Members</span>
                   </Button>
                   <Button
                     variant="ghost"
@@ -253,16 +253,16 @@ export function Ministries() {
                     onClick={() => handleExport(ministry)}
                     isLoading={exportingId === ministry.id}
                   >
-                    <Download className="h-3.5 w-3.5" /> Export
+                    <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Export</span>
                   </Button>
                   {canManageThis && (
                     <Button variant="ghost" size="sm" onClick={() => openEdit(ministry.id)}>
-                      <Pencil className="h-3.5 w-3.5" /> Edit
+                      <Pencil className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Edit</span>
                     </Button>
                   )}
                   {canManage && (
                     <Button variant="ghost" size="sm" onClick={() => handleDelete(ministry.id)}>
-                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                      <Trash2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Delete</span>
                     </Button>
                   )}
                 </div>
@@ -304,11 +304,11 @@ export function Ministries() {
             options={[{ value: '', label: 'No leader assigned' }, ...leaderOptions]}
             {...register('leader_id')}
           />
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button type="submit" isLoading={isSubmitting}>
+            <Button type="submit" isLoading={isSubmitting} className="w-full sm:w-auto">
               {editingId ? 'Save changes' : 'Create ministry'}
             </Button>
           </div>
@@ -363,7 +363,7 @@ function MinistryMembersModal({
   return (
     <Modal open onClose={onClose} title="Ministry members">
       {canManage && (
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 flex flex-col sm:flex-row gap-2">
           <Select
             value={addingMemberId}
             onChange={(e) => setAddingMemberId(e.target.value)}
@@ -373,7 +373,7 @@ function MinistryMembersModal({
               ...availableMembers.map((m) => ({ value: m.id, label: `${m.first_name} ${m.last_name}` })),
             ]}
           />
-          <Button onClick={handleAdd} disabled={!addingMemberId}>
+          <Button onClick={handleAdd} disabled={!addingMemberId} className="sm:w-auto">
             Add
           </Button>
         </div>
@@ -386,11 +386,11 @@ function MinistryMembersModal({
         <div className="space-y-2">
           {membersInMinistryQuery.data!.map((row: any) => (
             <div key={row.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-              <span className="text-sm text-ink">
+              <span className="text-sm text-ink truncate flex-1 mr-2">
                 {row.members?.first_name} {row.members?.last_name}
               </span>
               {canManage && (
-                <button onClick={() => handleRemove(row.id)} className="text-slate-400 hover:text-red-600">
+                <button onClick={() => handleRemove(row.id)} className="text-slate-400 hover:text-red-600 shrink-0">
                   <X className="h-4 w-4" />
                 </button>
               )}

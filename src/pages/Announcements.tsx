@@ -119,14 +119,14 @@ export function Announcements() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Announcements</h1>
           <p className="text-sm text-slate-500">Share updates with the whole church team.</p>
         </div>
         {canCreate && (
           <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> New announcement
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">New announcement</span>
           </Button>
         )}
       </div>
@@ -139,15 +139,15 @@ export function Announcements() {
         <div className="space-y-3">
           {announcements.map((a) => (
             <Card key={a.id}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    {a.is_pinned && <Pin className="h-3.5 w-3.5 text-accent" />}
-                    <h3 className="font-semibold text-ink">{a.title}</h3>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {a.is_pinned && <Pin className="h-3.5 w-3.5 text-accent shrink-0" />}
+                    <h3 className="font-semibold text-ink truncate">{a.title}</h3>
                     {a.is_pinned && <Badge tone="amber">Pinned</Badge>}
                   </div>
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{a.body}</p>
-                  <p className="mt-3 text-xs text-slate-400">
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600 break-words">{a.body}</p>
+                  <p className="mt-3 text-xs text-slate-400 break-words">
                     Published {formatDistanceToNow(new Date(a.published_at), { addSuffix: true })}
                     {a.expires_at && ` · Expires ${format(new Date(a.expires_at), 'MMM d, yyyy')}`}
                   </p>
@@ -191,11 +191,11 @@ export function Announcements() {
             <input type="checkbox" {...register('is_pinned')} className="rounded border-slate-300" />
             Pin to top
           </label>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button type="submit" isLoading={isSubmitting}>
+            <Button type="submit" isLoading={isSubmitting} className="w-full sm:w-auto">
               {editingId ? 'Save changes' : 'Post announcement'}
             </Button>
           </div>

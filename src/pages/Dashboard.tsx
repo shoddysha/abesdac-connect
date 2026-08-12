@@ -55,7 +55,7 @@ export function Dashboard() {
       {statsQuery.isLoading ? (
         <Spinner />
       ) : (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total members" value={stats?.total ?? 0} icon={Users} tone="primary" />
           <StatCard label="Active members" value={stats?.active ?? 0} icon={UserCheck} tone="secondary" />
           <StatCard label="Male members" value={stats?.male ?? 0} icon={Users} tone="primary" />
@@ -68,7 +68,7 @@ export function Dashboard() {
           <CardHeader 
             title="First-time visitors" 
             action={
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {unfollowedVisitors.length > 0 && (
                   <Badge tone="amber">{unfollowedVisitors.length} need follow-up</Badge>
                 )}
@@ -94,13 +94,13 @@ export function Dashboard() {
               {unfollowedVisitors.map((visitor) => (
                 <div
                   key={visitor.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50"
+                  className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0 sm:justify-between rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink">
                       {visitor.first_name} {visitor.last_name}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 break-words">
                       Visited {format(new Date(visitor.visit_date), 'MMM d, yyyy')}
                       {visitor.phone_number && ` · ${visitor.phone_number}`}
                     </p>
@@ -119,12 +119,12 @@ export function Dashboard() {
           ) : (
             <div className="space-y-3">
               {upcomingEvents.map((event) => (
-                <div key={event.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5">
-                  <div>
-                    <p className="text-sm font-medium text-ink">{event.title}</p>
-                    <p className="text-xs text-slate-500">{event.location}</p>
+                <div key={event.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0 sm:justify-between rounded-lg border border-slate-100 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-ink truncate">{event.title}</p>
+                    <p className="text-xs text-slate-500 truncate">{event.location}</p>
                   </div>
-                  <span className="text-xs font-medium text-secondary">
+                  <span className="text-xs font-medium text-secondary whitespace-nowrap">
                     {format(new Date(event.start_time), 'MMM d, h:mm a')}
                   </span>
                 </div>
@@ -153,9 +153,9 @@ export function Dashboard() {
               {logsQuery.data.map((log) => (
                 <div key={log.id} className="flex items-start gap-3 text-sm">
                   <Activity className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
-                  <p className="text-ink">
+                  <p className="text-ink break-words">
                     <span className="font-medium">{log.user_name ?? 'System'}</span> {log.description}
-                    <span className="ml-2 text-xs text-slate-400">
+                    <span className="ml-2 text-xs text-slate-400 whitespace-nowrap">
                       {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
                     </span>
                   </p>
@@ -209,22 +209,22 @@ export function Dashboard() {
           <div className="flex flex-col gap-2">
             <Link to="/members?action=add">
               <Button variant="outline" className="w-full justify-start">
-                <UserPlus className="h-4 w-4" /> Add member
+                <UserPlus className="h-4 w-4" /> <span className="truncate">Add member</span>
               </Button>
             </Link>
             <Link to="/attendance">
               <Button variant="outline" className="w-full justify-start">
-                <ClipboardCheck className="h-4 w-4" /> Record attendance
+                <ClipboardCheck className="h-4 w-4" /> <span className="truncate">Record attendance</span>
               </Button>
             </Link>
             <Link to="/events?action=add">
               <Button variant="outline" className="w-full justify-start">
-                <CalendarDays className="h-4 w-4" /> Create event
+                <CalendarDays className="h-4 w-4" /> <span className="truncate">Create event</span>
               </Button>
             </Link>
             <Link to="/announcements?action=add">
               <Button variant="outline" className="w-full justify-start">
-                <Megaphone className="h-4 w-4" /> Post announcement
+                <Megaphone className="h-4 w-4" /> <span className="truncate">Post announcement</span>
               </Button>
             </Link>
           </div>
@@ -259,12 +259,12 @@ export function Dashboard() {
               {/* Distribution bars below the chart */}
               <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                 {genderData.map((entry, i) => (
-                  <div key={entry.name} className="flex items-center gap-3">
+                  <div key={entry.name} className="flex items-center gap-2 sm:gap-3">
                     <span
                       className="h-3 w-3 shrink-0 rounded-full"
                       style={{ backgroundColor: GENDER_COLORS[i] }}
                     />
-                    <span className="w-14 text-sm font-medium text-ink">{entry.name}</span>
+                    <span className="w-12 sm:w-14 text-sm font-medium text-ink">{entry.name}</span>
                     <div className="flex-1 overflow-hidden rounded-full bg-slate-100">
                       <div
                         className="h-2 rounded-full transition-all duration-500"
@@ -276,7 +276,7 @@ export function Dashboard() {
                         }}
                       />
                     </div>
-                    <span className="w-20 text-right text-sm text-slate-500">
+                    <span className="w-16 sm:w-20 text-right text-xs sm:text-sm text-slate-500 whitespace-nowrap">
                       {entry.value} ({stats.total > 0 ? Math.round((entry.value / stats.total) * 100) : 0}%)
                     </span>
                   </div>

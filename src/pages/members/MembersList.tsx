@@ -86,7 +86,7 @@ export function MembersList() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Members</h1>
           <p className="text-sm text-slate-500">{members.length} member{members.length === 1 ? '' : 's'} found</p>
@@ -94,23 +94,23 @@ export function MembersList() {
         {canManage && (
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => exportToCSV('members', exportRows())}>
-              <Download className="h-4 w-4" /> CSV
+              <Download className="h-4 w-4" /> <span className="hidden sm:inline">CSV</span>
             </Button>
             <Button variant="outline" onClick={() => exportToExcel('members', exportRows())}>
-              <Download className="h-4 w-4" /> Excel
+              <Download className="h-4 w-4" /> <span className="hidden sm:inline">Excel</span>
             </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload className="h-4 w-4" /> Import
+              <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Import</span>
             </Button>
             <Button onClick={() => setFormOpen(true)}>
-              <UserPlus className="h-4 w-4" /> Add member
+              <UserPlus className="h-4 w-4" /> <span className="hidden sm:inline">Add member</span>
             </Button>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-        <div className="sm:col-span-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="sm:col-span-2 lg:col-span-1">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -156,7 +156,7 @@ export function MembersList() {
           }
         />
       ) : (
-        <div className="table-scroll">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>

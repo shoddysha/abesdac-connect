@@ -115,15 +115,15 @@ export function Attendance() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Attendance</h1>
           <p className="text-sm text-slate-500">Record check-ins for services and events.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {canManage && presentCount > 0 && (
             <Button variant="outline" onClick={exportToCSV}>
-              <Download className="h-4 w-4" /> Export CSV
+              <Download className="h-4 w-4" /> <span className="hidden sm:inline">Export CSV</span>
             </Button>
           )}
           {canManage && (
@@ -132,7 +132,7 @@ export function Attendance() {
               onClick={() => setQrModalOpen(true)}
               disabled={attendanceType === 'event' && !eventId}
             >
-              <QrCode className="h-4 w-4" /> QR check-in
+              <QrCode className="h-4 w-4" /> <span className="hidden sm:inline">QR check-in</span>
             </Button>
           )}
         </div>
@@ -168,7 +168,7 @@ export function Attendance() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <p className="text-xs text-slate-500">Present</p>
           <p className="text-2xl font-bold text-ink">{presentCount}</p>
@@ -200,7 +200,7 @@ export function Attendance() {
       ) : attendanceType === 'event' && !eventId ? (
         <EmptyState icon={ClipboardCheck} title="Select an event above to begin" />
       ) : (
-        <div className="table-scroll">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[600px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
@@ -227,12 +227,12 @@ export function Attendance() {
                     <td className="px-4 py-3 text-right">
                       {canManage && !record && (
                         <Button size="sm" onClick={() => handleCheckIn(member.id)}>
-                          <LogIn className="h-3.5 w-3.5" /> Check in
+                          <LogIn className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Check in</span>
                         </Button>
                       )}
                       {canManage && record && !record.check_out_time && (
                         <Button size="sm" variant="outline" onClick={() => handleCheckOut(record.id)}>
-                          <LogOut className="h-3.5 w-3.5" /> Check out
+                          <LogOut className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Check out</span>
                         </Button>
                       )}
                       {record?.check_out_time && <span className="text-xs text-emerald-600">Complete</span>}

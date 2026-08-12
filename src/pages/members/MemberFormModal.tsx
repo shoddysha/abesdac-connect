@@ -229,8 +229,8 @@ export function MemberFormModal({
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? 'Edit member' : 'Add member'} size="xl">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-slate-100">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-slate-100 shrink-0">
             {imagePreview ? (
               <img src={imagePreview} alt="" className="h-full w-full object-cover" />
             ) : (
@@ -358,11 +358,11 @@ export function MemberFormModal({
           </div>
         </section>
 
-        <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-          <Button type="button" variant="outline" onClick={onClose}>
+        <div className="flex flex-col sm:flex-row justify-end gap-2 border-t border-slate-200 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
             Cancel
           </Button>
-          <Button type="submit" isLoading={isSubmitting}>
+          <Button type="submit" isLoading={isSubmitting} className="w-full sm:w-auto">
             {isEdit ? 'Save changes' : 'Add member'}
           </Button>
         </div>
