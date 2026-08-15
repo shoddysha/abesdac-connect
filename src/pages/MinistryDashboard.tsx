@@ -27,7 +27,6 @@ import { StatCard } from '@/components/ui/StatCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { supabase } from '@/lib/supabase';
-import { fetchMinistries } from '@/services/ministries';
 import { fetchAllMinistryLeaders } from '@/services/leaders';
 import { getMinistryTaskStats } from '@/services/ministryTasks';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -36,32 +35,40 @@ export function MinistryDashboard() {
   const { profile } = useAuth();
   const navigate = useNavigate();
 
-  // Fetch user's ministry
-  const ministriesQuery = useQuery({
-    queryKey: ['ministries'],
-    queryFn: fetchMinistries,
+  // Fetch the leader's own ministry directly — avoids loading all ministries first
+  const ministryQuery = useQuery({
+    queryKey: ['my-ministry', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return null;
+      const { data, error } = await supabase
+        .from('ministries')
+        .select('*')
+        .eq('leader_id', profile.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!profile?.id,
   });
 
-  const userMinistry = ministriesQuery.data?.find((m) => m.leader_id === profile?.id);
+  const userMinistry = ministryQuery.data ?? null;
 
-  // Fetch ministry members (including members in other ministries but also in this one)
+  // Fetch ministry members — starts as soon as the ministry id is known
   const membersQuery = useQuery({
     queryKey: ['ministry-members', userMinistry?.id],
     queryFn: async () => {
-      if (!userMinistry) return [];
       const { data, error } = await supabase
         .from('ministry_members')
         .select('members(*)')
-        .eq('ministry_id', userMinistry.id)
+        .eq('ministry_id', userMinistry!.id)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      // Extract members and filter by active status
       return (data ?? [])
         .map((row: any) => row.members)
         .filter((m: any) => m && m.status === 'active')
         .sort((a: any, b: any) => a.first_name.localeCompare(b.first_name));
     },
-    enabled: !!userMinistry,
+    enabled: !!userMinistry?.id,
   });
 
   // Fetch leadership team
@@ -74,47 +81,43 @@ export function MinistryDashboard() {
   const eventsQuery = useQuery({
     queryKey: ['ministry-events', userMinistry?.id],
     queryFn: async () => {
-      if (!userMinistry) return [];
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .eq('ministry_id', userMinistry.id)
+        .eq('ministry_id', userMinistry!.id)
         .order('created_at', { ascending: false })
         .limit(5);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!userMinistry,
+    enabled: !!userMinistry?.id,
   });
 
   // Fetch task stats
   const statsQuery = useQuery({
     queryKey: ['ministry-task-stats', userMinistry?.id],
     queryFn: () => getMinistryTaskStats(userMinistry!.id),
-    enabled: !!userMinistry,
+    enabled: !!userMinistry?.id,
   });
 
-  // Fetch recent activity for this ministry
+  // Fetch recent activity — reads from audit_logs (RLS allows all authenticated via the updated policy)
   const activityQuery = useQuery({
     queryKey: ['ministry-activity', userMinistry?.id],
     queryFn: async () => {
-      if (!userMinistry) return [];
       const { data, error } = await supabase
         .from('audit_logs')
         .select('*')
-        .or(`module.eq.ministries,module.eq.ministry_tasks,module.eq.ministry_reports,module.eq.member_followups,module.eq.events`)
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(8);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!userMinistry,
+    enabled: !!userMinistry?.id,
   });
+
   const attendanceQuery = useQuery({
     queryKey: ['ministry-attendance', userMinistry?.id],
     queryFn: async () => {
-      if (!userMinistry) return { total: 0, thisMonth: 0, lastMonth: 0 };
-      
       const now = new Date();
       const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -137,9 +140,10 @@ export function MinistryDashboard() {
 
       return { total: data?.length || 0, thisMonth, lastMonth };
     },
-    enabled: !!userMinistry,
+    enabled: !!userMinistry?.id,
   });
 
+  useRealtimeQuery('ministries', ['my-ministry', profile?.id]);
   useRealtimeQuery('members', ['ministry-members', userMinistry?.id]);
   useRealtimeQuery('ministry_leaders', ['ministry-leaders']);
   useRealtimeQuery('events', ['ministry-events', userMinistry?.id]);
@@ -151,6 +155,15 @@ export function MinistryDashboard() {
   const events = eventsQuery.data ?? [];
   const stats = statsQuery.data;
   const attendance = attendanceQuery.data;
+
+  if (ministryQuery.isLoading) {
+    return (
+      <div className="space-y-5">
+        <h1 className="text-2xl font-bold text-ink">My Ministry</h1>
+        <Spinner />
+      </div>
+    );
+  }
 
   if (!userMinistry) {
     return (

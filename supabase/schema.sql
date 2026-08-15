@@ -464,8 +464,11 @@ create policy "announcements_write_admin_secretary" on public.announcements
 
 -- ---- AUDIT LOGS ----
 drop policy if exists "audit_logs_select_admin_pastor" on public.audit_logs;
-create policy "audit_logs_select_admin_pastor" on public.audit_logs
-  for select using (public.current_role() in ('administrator', 'pastor'));
+drop policy if exists "audit_logs_select_authenticated_roles" on public.audit_logs;
+create policy "audit_logs_select_authenticated_roles" on public.audit_logs
+  for select using (
+    public.current_role() in ('administrator', 'pastor', 'secretary', 'ministry_leader')
+  );
 
 -- audit_logs is written only by the SECURITY DEFINER trigger function above,
 -- so no insert policy is needed for normal client roles.

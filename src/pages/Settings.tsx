@@ -198,10 +198,7 @@ export function Settings() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ 
-          notification_preferences: updated,
-          updated_preferences_at: new Date().toISOString()
-        })
+        .update({ notification_preferences: updated })
         .eq('id', profile.id);
       
       if (error) throw error;
@@ -222,10 +219,7 @@ export function Settings() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ 
-          display_preferences: updated,
-          updated_preferences_at: new Date().toISOString()
-        })
+        .update({ display_preferences: updated })
         .eq('id', profile.id);
       
       if (error) throw error;

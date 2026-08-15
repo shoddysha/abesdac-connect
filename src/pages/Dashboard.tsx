@@ -139,7 +139,7 @@ export function Dashboard() {
           <CardHeader 
             title="Recent activity" 
             action={
-              hasRole('administrator', 'secretary') ? (
+              hasRole('administrator', 'secretary', 'ministry_leader') ? (
                 <Link to="/audit-logs" className="text-sm font-medium text-secondary hover:underline">
                   View all
                 </Link>
