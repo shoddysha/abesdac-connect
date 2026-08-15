@@ -1,7 +1,5 @@
-import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
 import {
   Users,
   Calendar,
@@ -10,8 +8,6 @@ import {
   Phone,
   Mail,
   Briefcase,
-  CheckCircle2,
-  Clock,
   FileText,
   Activity,
   BarChart3,
@@ -35,52 +31,50 @@ export function MinistryDashboard() {
   const { profile } = useAuth();
   const navigate = useNavigate();
 
-  // Fetch the leader's own ministry directly — avoids loading all ministries first
+  // Single query: fetch ministry AND its members in one round-trip.
+  // This eliminates the waterfall where membersQuery had to wait for
+  // ministryQuery to resolve before it could even start.
   const ministryQuery = useQuery({
-    queryKey: ['my-ministry', profile?.id],
+    queryKey: ['my-ministry-full', profile?.id],
     queryFn: async () => {
       if (!profile?.id) return null;
+
       const { data, error } = await supabase
         .from('ministries')
-        .select('*')
+        .select(`
+          *,
+          ministry_members (
+            members (*)
+          )
+        `)
         .eq('leader_id', profile.id)
         .maybeSingle();
+
       if (error) throw error;
       return data;
     },
     enabled: !!profile?.id,
+    staleTime: 0,
   });
 
   const userMinistry = ministryQuery.data ?? null;
 
-  // Fetch ministry members — starts as soon as the ministry id is known
-  const membersQuery = useQuery({
-    queryKey: ['ministry-members', userMinistry?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('ministry_members')
-        .select('members(*)')
-        .eq('ministry_id', userMinistry!.id)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return (data ?? [])
-        .map((row: any) => row.members)
-        .filter((m: any) => m && m.status === 'active')
-        .sort((a: any, b: any) => a.first_name.localeCompare(b.first_name));
-    },
-    enabled: !!userMinistry?.id,
-    staleTime: 0,
-  });
+  // Derive members directly from the nested result — no second query needed
+  const members = (userMinistry?.ministry_members ?? [])
+    .map((row: any) => row.members)
+    .filter((m: any) => m && m.status === 'active')
+    .sort((a: any, b: any) => a.first_name.localeCompare(b.first_name));
 
-  // Fetch leadership team
+  // Fetch leadership team (independent — no ministry dependency)
   const leadersQuery = useQuery({
     queryKey: ['ministry-leaders'],
     queryFn: fetchAllMinistryLeaders,
+    staleTime: 0,
   });
 
-  // Fetch upcoming events — shows all upcoming events regardless of ministry
+  // Fetch upcoming events — independent query, no ministry dependency
   const eventsQuery = useQuery({
-    queryKey: ['ministry-events', userMinistry?.id],
+    queryKey: ['ministry-events'],
     queryFn: async () => {
       const today = new Date().toISOString();
       const { data, error } = await supabase
@@ -90,7 +84,6 @@ export function MinistryDashboard() {
         .order('start_time', { ascending: true })
         .limit(5);
       if (error) throw error;
-      // Fall back to most recent past events if no upcoming ones exist
       if (!data || data.length === 0) {
         const { data: recent, error: recentError } = await supabase
           .from('events')
@@ -102,20 +95,20 @@ export function MinistryDashboard() {
       }
       return data;
     },
-    enabled: !!userMinistry?.id,
     staleTime: 0,
   });
 
-  // Fetch task stats
+  // Task stats — only needs ministry id
   const statsQuery = useQuery({
     queryKey: ['ministry-task-stats', userMinistry?.id],
     queryFn: () => getMinistryTaskStats(userMinistry!.id),
     enabled: !!userMinistry?.id,
+    staleTime: 0,
   });
 
-  // Fetch recent activity — reads from audit_logs (RLS allows all authenticated via the updated policy)
+  // Recent activity — independent query
   const activityQuery = useQuery({
-    queryKey: ['ministry-activity', userMinistry?.id],
+    queryKey: ['ministry-activity'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('audit_logs')
@@ -125,11 +118,12 @@ export function MinistryDashboard() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!userMinistry?.id,
+    staleTime: 0,
   });
 
+  // Attendance stats — independent query
   const attendanceQuery = useQuery({
-    queryKey: ['ministry-attendance', userMinistry?.id],
+    queryKey: ['ministry-attendance'],
     queryFn: async () => {
       const now = new Date();
       const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -153,17 +147,17 @@ export function MinistryDashboard() {
 
       return { total: data?.length || 0, thisMonth, lastMonth };
     },
-    enabled: !!userMinistry?.id,
+    staleTime: 0,
   });
 
-  useRealtimeQuery('ministries', ['my-ministry', profile?.id]);
-  useRealtimeQuery('members', ['ministry-members', userMinistry?.id]);
+  // Realtime subscriptions
+  useRealtimeQuery('ministries', ['my-ministry-full', profile?.id]);
+  useRealtimeQuery('ministry_members', ['my-ministry-full', profile?.id]);
   useRealtimeQuery('ministry_leaders', ['ministry-leaders']);
-  useRealtimeQuery('events', ['ministry-events', userMinistry?.id]);
+  useRealtimeQuery('events', ['ministry-events']);
   useRealtimeQuery('ministry_tasks', ['ministry-task-stats', userMinistry?.id]);
-  useRealtimeQuery('audit_logs', ['ministry-activity', userMinistry?.id]);
+  useRealtimeQuery('audit_logs', ['ministry-activity']);
 
-  const members = membersQuery.data ?? [];
   const leaders = (leadersQuery.data ?? []).filter((l) => l.ministry_id === userMinistry?.id);
   const events = eventsQuery.data ?? [];
   const stats = statsQuery.data;
@@ -255,7 +249,7 @@ export function MinistryDashboard() {
               </Button>
             }
           />
-          {membersQuery.isLoading ? (
+          {ministryQuery.isLoading ? (
             <Spinner />
           ) : members.length === 0 ? (
             <EmptyState
@@ -265,7 +259,7 @@ export function MinistryDashboard() {
             />
           ) : (
             <div className="space-y-2">
-              {members.slice(0, 8).map((member) => (
+              {members.slice(0, 8).map((member: any) => (
                 <div
                   key={member.id}
                   onClick={() => navigate(`/members/${member.id}`)}
@@ -333,7 +327,7 @@ export function MinistryDashboard() {
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary text-xs font-semibold shrink-0">
                     {leader.member_name
                       .split(' ')
-                      .map((n) => n[0])
+                      .map((n: string) => n[0])
                       .join('')}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -359,7 +353,7 @@ export function MinistryDashboard() {
         </Card>
       </div>
 
-      {/* Recent Events & Quick Links */}
+      {/* Upcoming Events & Quick Links */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader
@@ -457,7 +451,8 @@ export function MinistryDashboard() {
               <div key={log.id} className="flex items-start gap-3 text-sm">
                 <Activity className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
                 <p className="text-ink break-words">
-                  <span className="font-medium">{log.user_name ?? 'System'}</span> {log.description}
+                  <span className="font-medium">{log.user_name ?? 'System'}</span>{' '}
+                  {log.description}
                   <span className="ml-2 text-xs text-slate-400 whitespace-nowrap">
                     {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
                   </span>
@@ -474,7 +469,7 @@ export function MinistryDashboard() {
         )}
       </Card>
 
-      {/* Ministry Goals & Objectives */}
+      {/* Ministry Vision & Goals */}
       <Card>
         <CardHeader title="Ministry Vision & Goals" />
         <div className="prose prose-sm max-w-none">
