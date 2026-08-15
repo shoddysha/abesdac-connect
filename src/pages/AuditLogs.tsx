@@ -167,8 +167,8 @@ export function AuditLogs() {
                       </Badge>
                     </td>
                     <td className="py-3">
-                      <Badge tone={actionColors[log.action] || 'slate'}>
-                        {log.action}
+                      <Badge tone={actionColors[log.action?.toUpperCase()] || 'slate'}>
+                        {log.action?.toUpperCase()}
                       </Badge>
                     </td>
                     <td className="py-3 text-slate-600">

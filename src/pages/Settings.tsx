@@ -1,8 +1,8 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useState, useEffect, type ChangeEvent } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, type ChangeEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { KeyRound, User, Database, Bell, Clock, Shield, Palette, Download } from 'lucide-react';
@@ -15,7 +15,6 @@ import { uploadAvatar } from '@/services/storage';
 import { generateFullBackup, downloadBackupFile } from '@/services/backup';
 import { RestoreBackupModal } from '@/features/backup/RestoreBackupModal';
 import { supabase } from '@/lib/supabase';
-import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 
 
 const profileSchema = z.object({
@@ -41,50 +40,31 @@ export function Settings() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url ?? null);
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
-  
-  // Fetch user preferences from database with real-time updates
-  const preferencesQuery = useQuery({
-    queryKey: ['user-preferences', profile?.id],
-    queryFn: async () => {
-      if (!profile?.id) return null;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('notification_preferences, display_preferences')
-        .eq('id', profile.id)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!profile?.id,
+
+  // Notification preferences — stored in localStorage per user
+  const [notificationPrefs, setNotificationPrefs] = useState(() => {
+    const saved = profile?.id ? localStorage.getItem(`notif_prefs_${profile.id}`) : null;
+    return saved ? JSON.parse(saved) : {
+      task_assigned: true,
+      task_completed: true,
+      report_due: true,
+      report_submitted: true,
+      event_reminder: true,
+      birthday_reminder: true,
+      member_followup: true,
+      ministry_update: true,
+    };
   });
 
-  useRealtimeQuery('profiles', ['user-preferences', profile?.id]);
-
-  // Initialize preferences state from database
-  const [notificationPrefs, setNotificationPrefs] = useState({
-    task_assigned: true,
-    task_completed: true,
-    report_due: true,
-    report_submitted: true,
-    event_reminder: true,
-    birthday_reminder: true,
-    member_followup: true,
-    ministry_update: true,
+  // Display preferences — stored in localStorage
+  const [displayPrefs, setDisplayPrefs] = useState(() => {
+    const saved = localStorage.getItem('display_preferences');
+    return saved ? JSON.parse(saved) : {
+      theme: 'light',
+      items_per_page: 10,
+      date_format: 'MMM d, yyyy',
+    };
   });
-
-  const [displayPrefs, setDisplayPrefs] = useState({
-    theme: 'light',
-    items_per_page: 10,
-    date_format: 'MMM d, yyyy',
-  });
-
-  // Update state when preferences load from database
-  useEffect(() => {
-    if (preferencesQuery.data) {
-      setNotificationPrefs(preferencesQuery.data.notification_preferences || notificationPrefs);
-      setDisplayPrefs(preferencesQuery.data.display_preferences || displayPrefs);
-    }
-  }, [preferencesQuery.data]);
   
   // Legacy localStorage settings for backward compatibility (admin only)
   const [birthdaySmsEnabled, setBirthdaySmsEnabled] = useState(() => {
@@ -190,44 +170,28 @@ export function Settings() {
     toast.success(`Session timeout updated to ${timeout} minutes. Changes take effect on next login.`);
   }
 
-  async function updateNotificationPreference(key: string, value: boolean) {
-    if (!profile?.id) return;
+  function updateNotificationPreference(key: string, value: boolean) {
     const updated = { ...notificationPrefs, [key]: value };
     setNotificationPrefs(updated);
-    
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ notification_preferences: updated })
-        .eq('id', profile.id);
-      
-      if (error) throw error;
+      if (profile?.id) {
+        localStorage.setItem(`notif_prefs_${profile.id}`, JSON.stringify(updated));
+      }
       toast.success('Notification preference updated');
-      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
     } catch (err) {
       toast.error((err as Error).message);
-      // Revert on error
       setNotificationPrefs(notificationPrefs);
     }
   }
 
-  async function updateDisplayPreference(key: string, value: any) {
-    if (!profile?.id) return;
+  function updateDisplayPreference(key: string, value: any) {
     const updated = { ...displayPrefs, [key]: value };
     setDisplayPrefs(updated);
-    
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ display_preferences: updated })
-        .eq('id', profile.id);
-      
-      if (error) throw error;
+      localStorage.setItem('display_preferences', JSON.stringify(updated));
       toast.success('Display preference updated');
-      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
     } catch (err) {
       toast.error((err as Error).message);
-      // Revert on error
       setDisplayPrefs(displayPrefs);
     }
   }
@@ -314,22 +278,6 @@ export function Settings() {
           </Button>
         </form>
       </Card>
-
-      {hasRole('administrator', 'secretary') && (
-        <Card>
-          <CardHeader title="Backup & Restore" action={<Database className="h-4 w-4 text-slate-400" />} />
-          <p className="mb-4 text-sm text-slate-500">
-            Download a complete snapshot of every member, ministry, attendance record, event, announcement, user, and
-            audit log as one JSON file — useful to keep a periodic copy outside the app.
-          </p>
-          <Button onClick={handleBackup} isLoading={backupLoading}>
-            Download full backup
-          </Button>
-          <Button variant="outline" className="ml-2" onClick={() => setRestoreOpen(true)}>
-            Restore from backup
-          </Button>
-        </Card>
-      )}
 
       <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />
 

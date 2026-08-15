@@ -69,6 +69,7 @@ export function MinistryDashboard() {
         .sort((a: any, b: any) => a.first_name.localeCompare(b.first_name));
     },
     enabled: !!userMinistry?.id,
+    staleTime: 0,
   });
 
   // Fetch leadership team
@@ -77,20 +78,32 @@ export function MinistryDashboard() {
     queryFn: fetchAllMinistryLeaders,
   });
 
-  // Fetch recent events for this ministry
+  // Fetch upcoming events — shows all upcoming events regardless of ministry
   const eventsQuery = useQuery({
     queryKey: ['ministry-events', userMinistry?.id],
     queryFn: async () => {
+      const today = new Date().toISOString();
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .eq('ministry_id', userMinistry!.id)
-        .order('created_at', { ascending: false })
+        .gte('start_time', today)
+        .order('start_time', { ascending: true })
         .limit(5);
       if (error) throw error;
-      return data || [];
+      // Fall back to most recent past events if no upcoming ones exist
+      if (!data || data.length === 0) {
+        const { data: recent, error: recentError } = await supabase
+          .from('events')
+          .select('*')
+          .order('start_time', { ascending: false })
+          .limit(5);
+        if (recentError) throw recentError;
+        return recent || [];
+      }
+      return data;
     },
     enabled: !!userMinistry?.id,
+    staleTime: 0,
   });
 
   // Fetch task stats
@@ -350,7 +363,7 @@ export function MinistryDashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader
-            title="Recent Events"
+            title="Upcoming Events"
             action={
               <Button
                 size="sm"

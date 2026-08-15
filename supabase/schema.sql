@@ -296,35 +296,126 @@ language plpgsql
 security definer
 as $$
 declare
-  actor uuid := auth.uid();
+  actor      uuid := auth.uid();
   actor_name text;
-  act text;
-  rec_id uuid;
+  act        text;
+  rec_id     uuid;
+  rec_name   text;
+  descr      text;
 begin
   select full_name into actor_name from public.profiles where id = actor;
 
-  if (tg_op = 'INSERT') then
-    act := 'create';
+  -- Determine action verb and record id
+  if tg_op = 'INSERT' then
+    act    := 'CREATE';
     rec_id := new.id;
-  elsif (tg_op = 'UPDATE') then
-    act := 'update';
+  elsif tg_op = 'UPDATE' then
+    act    := 'UPDATE';
     rec_id := new.id;
-  elsif (tg_op = 'DELETE') then
-    act := 'delete';
+  else
+    act    := 'DELETE';
     rec_id := old.id;
+  end if;
+
+  -- Extract record name using IF/ELSIF so only the matching table's
+  -- fields are accessed — avoids "record has no field" errors
+  if tg_table_name = 'members' then
+    if tg_op = 'DELETE' then
+      rec_name := coalesce(old.first_name || ' ' || old.last_name, 'unknown member');
+    else
+      rec_name := coalesce(new.first_name || ' ' || new.last_name, 'unknown member');
+    end if;
+
+  elsif tg_table_name = 'visitors' then
+    if tg_op = 'DELETE' then
+      rec_name := coalesce(old.first_name || ' ' || old.last_name, 'unknown visitor');
+    else
+      rec_name := coalesce(new.first_name || ' ' || new.last_name, 'unknown visitor');
+    end if;
+
+  elsif tg_table_name = 'ministries' then
+    if tg_op = 'DELETE' then
+      rec_name := coalesce(old.name, 'unknown ministry');
+    else
+      rec_name := coalesce(new.name, 'unknown ministry');
+    end if;
+
+  elsif tg_table_name = 'events' then
+    if tg_op = 'DELETE' then
+      rec_name := coalesce(old.title, 'unknown event');
+    else
+      rec_name := coalesce(new.title, 'unknown event');
+    end if;
+
+  elsif tg_table_name = 'announcements' then
+    if tg_op = 'DELETE' then
+      rec_name := coalesce(old.title, 'unknown announcement');
+    else
+      rec_name := coalesce(new.title, 'unknown announcement');
+    end if;
+
+  elsif tg_table_name = 'attendance' then
+    if tg_op = 'DELETE' then
+      rec_name := coalesce(old.date::text, 'unknown date');
+    else
+      rec_name := coalesce(new.date::text, 'unknown date');
+    end if;
+
+  elsif tg_table_name = 'profiles' then
+    if tg_op = 'DELETE' then
+      rec_name := coalesce(old.full_name, 'unknown user');
+    else
+      rec_name := coalesce(new.full_name, 'unknown user');
+    end if;
+
+  else
+    rec_name := tg_table_name;
+  end if;
+
+  -- Build natural-language description
+  if act = 'CREATE' then
+    if    tg_table_name = 'members'       then descr := 'added new member ' || rec_name;
+    elsif tg_table_name = 'ministries'    then descr := 'created ministry "' || rec_name || '"';
+    elsif tg_table_name = 'events'        then descr := 'created event "' || rec_name || '"';
+    elsif tg_table_name = 'announcements' then descr := 'created announcement "' || rec_name || '"';
+    elsif tg_table_name = 'visitors'      then descr := 'added visitor ' || rec_name;
+    elsif tg_table_name = 'attendance'    then descr := 'recorded attendance for ' || rec_name;
+    else                                       descr := 'created record in ' || tg_table_name;
+    end if;
+
+  elsif act = 'UPDATE' then
+    if    tg_table_name = 'members'       then descr := 'updated member ' || rec_name;
+    elsif tg_table_name = 'ministries'    then descr := 'updated ministry "' || rec_name || '"';
+    elsif tg_table_name = 'events'        then descr := 'updated event "' || rec_name || '"';
+    elsif tg_table_name = 'announcements' then descr := 'updated announcement "' || rec_name || '"';
+    elsif tg_table_name = 'visitors'      then descr := 'updated visitor ' || rec_name;
+    elsif tg_table_name = 'attendance'    then descr := 'updated attendance for ' || rec_name;
+    elsif tg_table_name = 'profiles'      then descr := 'updated profile for ' || rec_name;
+    else                                       descr := 'updated record in ' || tg_table_name;
+    end if;
+
+  else -- DELETE
+    if    tg_table_name = 'members'       then descr := 'deleted member ' || rec_name;
+    elsif tg_table_name = 'ministries'    then descr := 'deleted ministry "' || rec_name || '"';
+    elsif tg_table_name = 'events'        then descr := 'deleted event "' || rec_name || '"';
+    elsif tg_table_name = 'announcements' then descr := 'deleted announcement "' || rec_name || '"';
+    elsif tg_table_name = 'visitors'      then descr := 'deleted visitor ' || rec_name;
+    elsif tg_table_name = 'attendance'    then descr := 'deleted attendance for ' || rec_name;
+    else                                       descr := 'deleted record from ' || tg_table_name;
+    end if;
   end if;
 
   insert into public.audit_logs (user_id, user_name, action, module, record_id, description)
   values (
     actor,
-    coalesce(actor_name, 'system'),
+    coalesce(actor_name, 'System'),
     act,
     tg_table_name,
     rec_id,
-    act || ' on ' || tg_table_name
+    descr
   );
 
-  if (tg_op = 'DELETE') then
+  if tg_op = 'DELETE' then
     return old;
   end if;
   return new;
