@@ -113,8 +113,25 @@ export async function updateMinistryReport(id: string, updates: UpdateReportInpu
   if (error) throw error;
 }
 
+/** Acknowledge a report (admin/secretary only) */
+export async function acknowledgeMinistryReport(
+  id: string,
+  acknowledgedBy: string,
+  note?: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('ministry_reports')
+    .update({
+      acknowledged_at: new Date().toISOString(),
+      acknowledged_by: acknowledgedBy,
+      acknowledgement_note: note || null,
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 /**
- * Delete a report
+ * Delete a report (all roles allowed)
  */
 export async function deleteMinistryReport(id: string): Promise<void> {
   const { error } = await supabase

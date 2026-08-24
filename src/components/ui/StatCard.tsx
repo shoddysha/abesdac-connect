@@ -24,9 +24,9 @@ export function StatCard({
         <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-lg', toneClasses[tone])}>
           <Icon className="h-5 w-5" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm text-slate-500">{label}</p>
-          <p className="text-2xl font-bold text-ink">{value}</p>
+          <p className="truncate text-xl font-bold text-ink" title={String(value)}>{value}</p>
         </div>
       </div>
     </div>
