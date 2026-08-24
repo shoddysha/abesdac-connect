@@ -24,7 +24,7 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle,
-} from 'lucide-react'; from 'lucide-react';
+} from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
