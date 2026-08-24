@@ -28,7 +28,7 @@ import type { MinistryBudgetWithDetails } from '@/services/ministryBudgets';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { Modal } from '@/components/ui/Modal';
-import { Input, TextArea } from '@/components/ui/Input';
+import { Input, Textarea } from '@/components/ui/Input';
 
 const BUDGET_TYPE_LABELS: Record<string, string> = {
   annual: 'Annual',
@@ -39,7 +39,7 @@ const BUDGET_TYPE_LABELS: Record<string, string> = {
 };
 
 export function AllMinistryReports() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const queryClient = useQueryClient();
   const [selectedMinistry, setSelectedMinistry] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -73,7 +73,7 @@ export function AllMinistryReports() {
   // ── Mutations ─────────────────────────────────────────────────────────────
   const acknowledgeReportMutation = useMutation({
     mutationFn: ({ id, note }: { id: string; note?: string }) =>
-      acknowledgeMinistryReport(id, user?.id || '', note),
+      acknowledgeMinistryReport(id, profile?.id || '', note),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-ministry-reports'] });
       setAckModal(null);
@@ -83,7 +83,7 @@ export function AllMinistryReports() {
 
   const acknowledgeBudgetMutation = useMutation({
     mutationFn: ({ id, note }: { id: string; note?: string }) =>
-      acknowledgeMinistryBudget(id, user?.id || '', note),
+      acknowledgeMinistryBudget(id, profile?.id || '', note),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-ministry-budgets'] });
       setAckModal(null);
@@ -399,7 +399,6 @@ export function AllMinistryReports() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    tone="red"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       acknowledgeBudgetMutation.mutate({ id: budget.id });
@@ -414,7 +413,6 @@ export function AllMinistryReports() {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  tone="red"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (confirm('Delete this budget? This cannot be undone.')) {
@@ -544,7 +542,6 @@ export function AllMinistryReports() {
                           <Button
                             size="sm"
                             variant="outline"
-                            tone="red"
                             onClick={() => acknowledgeReportMutation.mutate({ id: report.id })}
                             disabled={acknowledgeReportMutation.isPending}
                             title="Remove acknowledgement"
@@ -556,7 +553,6 @@ export function AllMinistryReports() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          tone="red"
                           onClick={() => {
                             if (confirm('Delete this report? This cannot be undone.')) {
                               deleteReportMutation.mutate(report.id);
@@ -707,7 +703,6 @@ export function AllMinistryReports() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      tone="red"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         acknowledgeBudgetMutation.mutate({ id: budget.id });
@@ -722,7 +717,6 @@ export function AllMinistryReports() {
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    tone="red"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (confirm('Delete this budget? This cannot be undone.')) {
@@ -751,7 +745,7 @@ export function AllMinistryReports() {
       {/* Acknowledgement Modal */}
       {ackModal && (
         <Modal
-          isOpen={true}
+          open={true}
           onClose={() => {
             setAckModal(null);
             setAckNote('');
@@ -762,10 +756,10 @@ export function AllMinistryReports() {
             <p className="text-sm text-slate-600">
               This will notify the ministry leader that their {ackModal.type} has been reviewed and acknowledged.
             </p>
-            <TextArea
+            <Textarea
               label="Note (optional)"
               value={ackNote}
-              onChange={(e) => setAckNote(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAckNote(e.target.value)}
               placeholder="Add a note for the ministry leader..."
               rows={3}
             />

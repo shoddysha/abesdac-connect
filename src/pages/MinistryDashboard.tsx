@@ -649,7 +649,6 @@ export function MinistryDashboard() {
                         <Button
                           size="sm"
                           variant="outline"
-                          tone="red"
                           onClick={() => handleDeleteBudget(budget.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" /> Delete
