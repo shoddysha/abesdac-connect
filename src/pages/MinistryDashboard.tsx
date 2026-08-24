@@ -594,33 +594,10 @@ export function MinistryDashboard() {
                     </div>
                   </div>
 
-import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import toast from 'react-hot-toast';
-import {
-  Users,
-  Calendar,
-  UserPlus,
-  Phone,
-  Mail,
-  Briefcase,
-  FileText,
-  Activity,
-  Target,
-  Award,
-  PiggyBank,
-  Plus,
-  Trash2,
-  Send,
-  TrendingUp,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle,
-} from 'lucide-react';
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 border-t border-slate-100 pt-3 space-y-3">
+                      {budget.description && (
                         <p className="text-sm text-slate-600">{budget.description}</p>
                       )}
 
