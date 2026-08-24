@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Heart,
@@ -38,6 +39,13 @@ type FollowUpFormValues = z.infer<typeof followUpSchema>;
 export function MemberFollowUp() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  // Admin and secretary see the aggregated all-ministries view
+  if (profile?.role === 'administrator' || profile?.role === 'secretary') {
+    navigate('/all-member-followups', { replace: true });
+    return null;
+  }
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
   const [typeFilter, setTypeFilter] = useState<string>('all');

@@ -257,6 +257,32 @@ export interface MinistryReport {
   updated_at: string;
 }
 
+// Ministry Budget Types
+export type BudgetType = 'annual' | 'event' | 'project' | 'quarterly' | 'other';
+export type BudgetStatus = 'draft' | 'submitted';
+
+export interface BudgetLineItem {
+  label: string;
+  amount: number;
+  note?: string;
+}
+
+export interface MinistryBudget {
+  id: string;
+  ministry_id: string;
+  title: string;
+  budget_type: BudgetType;
+  period: string;           // e.g. "2026", "Q1 2026", "Camp Meeting 2026"
+  description: string | null;
+  line_items: BudgetLineItem[];
+  total_amount: number;
+  status: BudgetStatus;
+  submitted_by: string | null;
+  submitted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Member Follow-up Types
 export type FollowUpType = 'pastoral_care' | 'new_member' | 'inactive' | 'sick_visit' | 'prayer_request' | 'other';
 export type FollowUpPriority = 'low' | 'medium' | 'high';

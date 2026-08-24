@@ -27,6 +27,7 @@ import { MinistryTasks } from '@/pages/MinistryTasks';
 import { MinistryReports } from '@/pages/MinistryReports';
 import { MemberFollowUp } from '@/pages/MemberFollowUp';
 import { AllMinistryReports } from '@/pages/AllMinistryReports';
+import { AllMemberFollowUps } from '@/pages/AllMemberFollowUps';
 
 export function App() {
   return (
@@ -123,6 +124,14 @@ export function App() {
               element={
                 <ProtectedRoute roles={['administrator', 'secretary']}>
                   <AllMinistryReports />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/all-member-followups"
+              element={
+                <ProtectedRoute roles={['administrator', 'secretary']}>
+                  <AllMemberFollowUps />
                 </ProtectedRoute>
               }
             />
