@@ -79,7 +79,7 @@ export async function fetchAllMinistryReports(): Promise<MinistryReportWithDetai
 /**
  * Create a new report
  */
-export async function createMinistryReport(input: CreateReportInput): Promise<MinistryReport> {
+export async function createMinistryReport(input: CreateReportInput, submittedBy: string): Promise<MinistryReport> {
   const { data, error } = await supabase
     .from('ministry_reports')
     .insert({
@@ -93,6 +93,7 @@ export async function createMinistryReport(input: CreateReportInput): Promise<Mi
       attendance_count: input.attendance_count || null,
       expenses: input.expenses || null,
       future_plans: input.future_plans || null,
+      submitted_by: submittedBy,
     })
     .select()
     .single();
