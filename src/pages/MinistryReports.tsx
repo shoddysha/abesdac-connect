@@ -87,10 +87,10 @@ export function MinistryReports() {
         .select(`
           *,
           ministries(name),
-          profiles(full_name)
+          submitter:profiles!ministry_reports_submitted_by_fkey(full_name)
         `)
         .eq('submitted_by', profile.id)
-        .order('submitted_at', { ascending: false });
+        .order('submitted_at', { ascending: false});
 
       if (error) {
         console.error('❌ Error fetching reports:', error);
@@ -103,7 +103,7 @@ export function MinistryReports() {
       const mapped = (data || []).map((report: any) => ({
         ...report,
         ministry_name: report.ministries?.name,
-        submitter_name: report.profiles?.full_name,
+        submitter_name: report.submitter?.full_name,
       }));
       
       console.log('✅ Mapped reports:', mapped);
