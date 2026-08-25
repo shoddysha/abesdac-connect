@@ -244,12 +244,14 @@ export interface MinistryReport {
   ministry_id: string;
   report_period: string;
   report_type: ReportType;
+  event_id: string | null;
   title: string;
   summary: string | null;
   achievements: string | null;
   challenges: string | null;
   attendance_count: number | null;
   expenses: number | null;
+  budget: number | null;
   future_plans: string | null;
   submitted_by: string | null;
   submitted_at: string;

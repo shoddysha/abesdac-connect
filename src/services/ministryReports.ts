@@ -10,12 +10,14 @@ export interface CreateReportInput {
   ministry_id: string;
   report_period: string;
   report_type?: ReportType;
+  event_id?: string;
   title: string;
   summary?: string;
   achievements?: string;
   challenges?: string;
   attendance_count?: number;
   expenses?: number;
+  budget?: number;
   future_plans?: string;
 }
 
@@ -92,18 +94,20 @@ export async function fetchAllMinistryReports(): Promise<MinistryReportWithDetai
  * Create a new report
  */
 export async function createMinistryReport(input: CreateReportInput, submittedBy: string): Promise<MinistryReport> {
-  const { data, error } = await supabase
+  const { data, error} = await supabase
     .from('ministry_reports')
     .insert({
       ministry_id: input.ministry_id,
       report_period: input.report_period,
       report_type: input.report_type || 'monthly',
+      event_id: input.event_id || null,
       title: input.title,
       summary: input.summary || null,
       achievements: input.achievements || null,
       challenges: input.challenges || null,
       attendance_count: input.attendance_count || null,
       expenses: input.expenses || null,
+      budget: input.budget || null,
       future_plans: input.future_plans || null,
       submitted_by: submittedBy,
     })
