@@ -170,22 +170,22 @@ export function Dashboard() {
 
         {/* Pending ministry reports (admin/secretary only) */}
         {hasRole('administrator', 'secretary') && pendingReports.length > 0 && (
-          <Card className="border-l-4 border-l-blue-500">
-            <div className="flex items-start gap-3">
-              <Clock className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-ink">Reports Pending Review</h3>
-                <p className="text-xs text-slate-600 mt-1">
-                  {pendingReports.length} ministry report{pendingReports.length !== 1 ? 's' : ''} awaiting acknowledgement
-                </p>
-                <Link to="/ministry-reports">
+          <Link to="/all-ministry-reports">
+            <Card className="border-l-4 border-l-blue-500 hover:shadow-md transition-shadow cursor-pointer">
+              <div className="flex items-start gap-3">
+                <Clock className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-ink">Reports Pending Review</h3>
+                  <p className="text-xs text-slate-600 mt-1">
+                    {pendingReports.length} ministry report{pendingReports.length !== 1 ? 's' : ''} awaiting acknowledgement
+                  </p>
                   <Button size="sm" variant="outline" className="mt-2">
                     Review Reports
                   </Button>
-                </Link>
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          </Link>
         )}
 
         {/* Upcoming birthdays this week */}
@@ -209,26 +209,70 @@ export function Dashboard() {
         )}
       </div>
 
-      {/* Attendance Trend Chart */}
+      {/* Attendance Trend Chart & Quick Stats */}
       {hasRole('administrator', 'secretary') && (
-        <Card>
-          <CardHeader title="Attendance Trend (Last 6 Months)" />
-          {attendanceQuery.isLoading ? (
-            <Spinner />
-          ) : attendanceTrend.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={attendanceTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#1E5EFF" name="Attendance" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="py-10 text-center text-sm text-slate-400">No attendance data yet</p>
-          )}
-        </Card>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader title="Attendance Trend (Last 6 Months)" />
+            {attendanceQuery.isLoading ? (
+              <Spinner />
+            ) : attendanceTrend.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={attendanceTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#1E5EFF" name="Attendance" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="py-10 text-center text-sm text-slate-400">No attendance data yet</p>
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader title="Quick Links" />
+            <div className="grid grid-cols-2 gap-3">
+              <Link to="/members">
+                <Button variant="outline" className="w-full h-auto flex-col gap-2 py-4">
+                  <Users className="h-5 w-5" />
+                  <span className="text-sm text-center">Members</span>
+                </Button>
+              </Link>
+              <Link to="/ministries">
+                <Button variant="outline" className="w-full h-auto flex-col gap-2 py-4">
+                  <Building2 className="h-5 w-5" />
+                  <span className="text-sm text-center">Ministries</span>
+                </Button>
+              </Link>
+              <Link to="/events">
+                <Button variant="outline" className="w-full h-auto flex-col gap-2 py-4">
+                  <CalendarDays className="h-5 w-5" />
+                  <span className="text-sm text-center">Events</span>
+                </Button>
+              </Link>
+              <Link to="/all-ministry-reports">
+                <Button variant="outline" className="w-full h-auto flex-col gap-2 py-4">
+                  <FileText className="h-5 w-5" />
+                  <span className="text-sm text-center">Reports</span>
+                </Button>
+              </Link>
+              <Link to="/visitors">
+                <Button variant="outline" className="w-full h-auto flex-col gap-2 py-4">
+                  <UserPlus2 className="h-5 w-5" />
+                  <span className="text-sm text-center">Visitors</span>
+                </Button>
+              </Link>
+              <Link to="/announcements">
+                <Button variant="outline" className="w-full h-auto flex-col gap-2 py-4">
+                  <Megaphone className="h-5 w-5" />
+                  <span className="text-sm text-center">Announcements</span>
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* Main Content Grid */}

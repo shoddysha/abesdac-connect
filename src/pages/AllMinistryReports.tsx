@@ -10,6 +10,7 @@ import {
   Filter,
   CheckCircle,
   XCircle,
+  Trash2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -18,7 +19,7 @@ import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { Select, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
-import { fetchAllMinistryReports, acknowledgeMinistryReport, unacknowledgeMinistryReport } from '@/services/ministryReports';
+import { fetchAllMinistryReports, acknowledgeMinistryReport, unacknowledgeMinistryReport, deleteMinistryReport } from '@/services/ministryReports';
 import { fetchMinistries } from '@/services/ministries';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -66,6 +67,17 @@ export function AllMinistryReports() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-ministry-reports'] });
       toast.success('Acknowledgement removed');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteMinistryReport,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['all-ministry-reports'] });
+      toast.success('Report deleted successfully');
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -307,15 +319,31 @@ export function AllMinistryReports() {
                           Acknowledge
                         </Button>
                       ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => unacknowledgeMutation.mutate(report.id)}
-                          disabled={unacknowledgeMutation.isPending}
-                        >
-                          <XCircle className="h-3.5 w-3.5" />
-                          Unacknowledge
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => unacknowledgeMutation.mutate(report.id)}
+                            disabled={unacknowledgeMutation.isPending}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Unacknowledge
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+                                deleteMutation.mutate(report.id);
+                              }
+                            }}
+                            disabled={deleteMutation.isPending}
+                            className="text-red-600 hover:text-red-700 hover:border-red-300"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </Button>
+                        </>
                       )}
                     </div>
                   </Card>
