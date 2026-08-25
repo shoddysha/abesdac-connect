@@ -1,4 +1,4 @@
-import { useQuery } from '@tantml:react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { 
   Users, 
@@ -96,14 +96,14 @@ export function Dashboard() {
   useRealtimeQuery('ministry_reports', ['dashboard-reports']);
 
   const stats = statsQuery.data;
-  const upcomingEvents = (eventsQuery.data ?? []).filter((e) => isFuture(new Date(e.start_time))).slice(0, 5);
+  const upcomingEvents = (eventsQuery.data ?? []).filter((e: any) => isFuture(new Date(e.start_time))).slice(0, 5);
   const upcomingBirthdays = (birthdaysQuery.data ?? []).slice(0, 7);
   const unfollowedVisitors = (visitorsQuery.data ?? []).slice(0, 5);
   const reports = reportsQuery.data ?? [];
   const ministries = ministriesQuery.data ?? [];
   
-  const pendingReports = reports.filter(r => !r.acknowledged_at);
-  const acknowledgedReports = reports.filter(r => r.acknowledged_at);
+  const pendingReports = reports.filter((r: any) => !r.acknowledged_at);
+  const acknowledgedReports = reports.filter((r: any) => r.acknowledged_at);
 
   const genderData = stats
     ? [
@@ -133,7 +133,7 @@ export function Dashboard() {
           <StatCard label="Active Members" value={stats?.active ?? 0} icon={UserCheck} tone="secondary" />
           <StatCard 
             label="Active Ministries" 
-            value={ministries.filter(m => m.is_active).length} 
+            value={ministries.filter((m: any) => m.is_active).length} 
             icon={Building2} 
             tone="accent" 
           />
@@ -189,17 +189,17 @@ export function Dashboard() {
         )}
 
         {/* Upcoming birthdays this week */}
-        {upcomingBirthdays.filter(b => b.days_until <= 7).length > 0 && (
+        {upcomingBirthdays.filter((b: any) => b.days_until <= 7).length > 0 && (
           <Card className="border-l-4 border-l-green-500">
             <div className="flex items-start gap-3">
               <Cake className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold text-ink">Birthdays This Week</h3>
                 <p className="text-xs text-slate-600 mt-1">
-                  {upcomingBirthdays.filter(b => b.days_until <= 7).length} member{upcomingBirthdays.filter(b => b.days_until <= 7).length !== 1 ? 's' : ''} celebrating
+                  {upcomingBirthdays.filter((b: any) => b.days_until <= 7).length} member{upcomingBirthdays.filter((b: any) => b.days_until <= 7).length !== 1 ? 's' : ''} celebrating
                 </p>
                 <div className="mt-2 text-xs text-slate-500">
-                  {upcomingBirthdays.filter(b => b.days_until <= 7).slice(0, 3).map((b) => (
+                  {upcomingBirthdays.filter((b: any) => b.days_until <= 7).slice(0, 3).map((b: any) => (
                     <div key={b.id}>{b.first_name} {b.last_name}</div>
                   ))}
                 </div>
@@ -260,7 +260,7 @@ export function Dashboard() {
               <p className="text-sm text-slate-500 mb-3">
                 These visitors need follow-up contact from pastoral team
               </p>
-              {unfollowedVisitors.map((visitor) => (
+              {unfollowedVisitors.map((visitor: any) => (
                 <div
                   key={visitor.id}
                   className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0 sm:justify-between rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50"
@@ -287,7 +287,7 @@ export function Dashboard() {
             <EmptyState icon={CalendarDays} title="No Upcoming Events" description="Create one from the Events page." />
           ) : (
             <div className="space-y-3">
-              {upcomingEvents.map((event) => (
+              {upcomingEvents.map((event: any) => (
                 <div key={event.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0 sm:justify-between rounded-lg border border-slate-100 px-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-ink truncate">{event.title}</p>
@@ -353,7 +353,7 @@ export function Dashboard() {
             <Spinner />
           ) : logsQuery.data && logsQuery.data.length > 0 ? (
             <div className="space-y-3">
-              {logsQuery.data.map((log) => (
+              {logsQuery.data.map((log: any) => (
                 <div key={log.id} className="flex items-start gap-3 text-sm">
                   <Activity className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
                   <p className="text-ink break-words">
@@ -380,7 +380,7 @@ export function Dashboard() {
             <EmptyState icon={Cake} title="No Birthdays Soon" description="No member birthdays in the next 30 days." />
           ) : (
             <div className="space-y-2">
-              {upcomingBirthdays.map((member) => (
+              {upcomingBirthdays.map((member: any) => (
                 <Link
                   key={member.id}
                   to={`/members/${member.id}`}
