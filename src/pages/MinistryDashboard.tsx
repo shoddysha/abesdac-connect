@@ -340,7 +340,7 @@ export function MinistryDashboard() {
         {/* Quick Actions */}
         <Card>
           <CardHeader title="Quick Actions" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <Button
               variant="outline"
               className="h-auto flex-col gap-2 py-4"
@@ -360,18 +360,18 @@ export function MinistryDashboard() {
             <Button
               variant="outline"
               className="h-auto flex-col gap-2 py-4"
-              onClick={() => navigate('/member-followup')}
+              onClick={() => navigate('/submit-ministry-budget')}
             >
-              <Users className="h-5 w-5" />
-              <span className="text-sm text-center">Follow-ups</span>
+              <TrendingUp className="h-5 w-5" />
+              <span className="text-sm text-center">Submit Budget</span>
             </Button>
             <Button
               variant="outline"
               className="h-auto flex-col gap-2 py-4"
-              onClick={() => navigate('/leaders')}
+              onClick={() => navigate('/member-followup')}
             >
-              <Award className="h-5 w-5" />
-              <span className="text-sm text-center">Manage Leaders</span>
+              <Target className="h-5 w-5" />
+              <span className="text-sm text-center">Follow-ups</span>
             </Button>
           </div>
         </Card>

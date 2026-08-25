@@ -15,6 +15,8 @@ export type PrayerStatus = 'open' | 'ongoing' | 'answered';
 export type TaskPriority = 'high' | 'medium' | 'low';
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 export type ReportType = 'monthly' | 'quarterly' | 'annual' | 'special';
+export type BudgetStatus = 'pending' | 'approved' | 'rejected' | 'allocated';
+export type BudgetPeriodType = 'monthly' | 'quarterly' | 'annual' | 'special';
 
 export interface Profile {
   id: string;
@@ -251,7 +253,6 @@ export interface MinistryReport {
   challenges: string | null;
   attendance_count: number | null;
   expenses: number | null;
-  budget: number | null;
   future_plans: string | null;
   submitted_by: string | null;
   submitted_at: string;
@@ -260,6 +261,38 @@ export interface MinistryReport {
   acknowledgement_note: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface MinistryBudget {
+  id: string;
+  ministry_id: string;
+  title: string;
+  description: string | null;
+  budget_period: string;
+  period_type: BudgetPeriodType;
+  event_id: string | null;
+  total_amount: number;
+  status: BudgetStatus;
+  submitted_by: string | null;
+  submitted_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MinistryBudgetItem {
+  id: string;
+  budget_id: string;
+  item_name: string;
+  description: string | null;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  category: string | null;
+  priority: string | null;
+  created_at: string;
 }
 
 // Member Follow-up Types

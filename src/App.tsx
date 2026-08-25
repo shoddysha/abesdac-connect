@@ -26,6 +26,7 @@ import { MinistryDashboard } from '@/pages/MinistryDashboard';
 import { MinistryTasks } from '@/pages/MinistryTasks';
 import { MinistryReports } from '@/pages/MinistryReports';
 import { SubmitMinistryReport } from '@/pages/SubmitMinistryReport';
+import { SubmitMinistryBudget } from '@/pages/SubmitMinistryBudget';
 import { MemberFollowUp } from '@/pages/MemberFollowUp';
 import { AllMinistryReports } from '@/pages/AllMinistryReports';
 import { AllMemberFollowUps } from '@/pages/AllMemberFollowUps';
@@ -101,6 +102,12 @@ export function App() {
             <Route path="/submit-ministry-report" element={
                 <ProtectedRoute roles={['ministry_leader']}>
                   <SubmitMinistryReport />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/submit-ministry-budget" element={
+                <ProtectedRoute roles={['ministry_leader']}>
+                  <SubmitMinistryBudget />
                 </ProtectedRoute>
               }
             />

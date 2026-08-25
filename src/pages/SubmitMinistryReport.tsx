@@ -28,7 +28,6 @@ const reportSchema = z.object({
   challenges: z.string().optional(),
   attendance_count: z.string().optional(),
   expenses: z.string().optional(),
-  budget: z.string().optional(),
   future_plans: z.string().optional(),
 });
 type ReportFormValues = z.infer<typeof reportSchema>;
@@ -60,7 +59,6 @@ export function SubmitMinistryReport() {
     defaultValues: { 
       report_type: 'monthly',
       event_id: '',
-      budget: '',
     },
   });
 
@@ -82,7 +80,6 @@ export function SubmitMinistryReport() {
         challenges: values.challenges,
         attendance_count: values.attendance_count ? parseInt(values.attendance_count) : undefined,
         expenses: values.expenses ? parseFloat(values.expenses) : undefined,
-        budget: values.budget ? parseFloat(values.budget) : undefined,
         future_plans: values.future_plans,
       };
 
@@ -218,20 +215,12 @@ export function SubmitMinistryReport() {
             {...reportForm.register('challenges')}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               type="number"
               label="Attendance Count"
               placeholder="Total attendance"
               {...reportForm.register('attendance_count')}
-            />
-
-            <Input
-              type="number"
-              step="0.01"
-              label="Budget (GH₵)"
-              placeholder="0.00"
-              {...reportForm.register('budget')}
             />
 
             <Input

@@ -17,7 +17,6 @@ export interface CreateReportInput {
   challenges?: string;
   attendance_count?: number;
   expenses?: number;
-  budget?: number;
   future_plans?: string;
 }
 
