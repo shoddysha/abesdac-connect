@@ -26,6 +26,7 @@ import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { fetchMinistries } from '@/services/ministries';
+import { supabase } from '@/lib/supabase';
 import {
   fetchMinistryReports,
   createMinistryReport,
@@ -60,7 +61,7 @@ export function MinistryReports() {
 
   const canEdit = hasRole('ministry_leader'); // Only ministry leaders can edit
 
-  // Fetch user's ministry
+  // Fetch user's ministry (for cases where properly assigned)
   const ministriesQuery = useQuery({
     queryKey: ['ministries'],
     queryFn: fetchMinistries,
@@ -68,15 +69,61 @@ export function MinistryReports() {
 
   const userMinistry = ministriesQuery.data?.find((m) => m.leader_id === profile?.id);
 
+  // NEW: Fetch reports that this user submitted (works even without ministry assignment)
   const reportsQuery = useQuery({
-    queryKey: ['ministry-reports', userMinistry?.id],
-    queryFn: () => fetchMinistryReports(userMinistry!.id),
-    enabled: !!userMinistry,
+    queryKey: ['ministry-leader-reports', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) {
+        console.log('❌ No profile ID found');
+        return [];
+      }
+      
+      console.log('🔍 Fetching reports for user:', profile.id);
+      console.log('🔍 User role:', profile.role);
+      console.log('🔍 Has ministry_leader role:', hasRole('ministry_leader'));
+      
+      const { data, error } = await supabase
+        .from('ministry_reports')
+        .select(`
+          *,
+          ministries(name),
+          profiles(full_name)
+        `)
+        .eq('submitted_by', profile.id)
+        .order('submitted_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching reports:', error);
+        throw error;
+      }
+
+      console.log('✅ Raw data from database:', data);
+      console.log('📊 Number of reports found:', data?.length || 0);
+
+      const mapped = (data || []).map((report: any) => ({
+        ...report,
+        ministry_name: report.ministries?.name,
+        submitter_name: report.profiles?.full_name,
+      }));
+      
+      console.log('✅ Mapped reports:', mapped);
+
+      return mapped;
+    },
+    enabled: !!profile?.id,  // CHANGED: Removed hasRole check to test
   });
 
-  useRealtimeQuery('ministry_reports', ['ministry-reports', userMinistry?.id]);
+  useRealtimeQuery('ministry_reports', ['ministry-leader-reports', profile?.id]);
 
   const reports = reportsQuery.data ?? [];
+  
+  console.log('📋 Final reports array:', reports);
+  console.log('📋 Reports length:', reports.length);
+  console.log('🔐 User profile ID:', profile?.id);
+  console.log('🏢 User ministry:', userMinistry);
+  console.log('✅ Can edit:', canEdit);
+  console.log('⏳ Query loading:', reportsQuery.isLoading);
+  console.log('❌ Query error:', reportsQuery.error);
 
   const reportForm = useForm<ReportFormValues>({
     resolver: zodResolver(reportSchema),
@@ -120,11 +167,23 @@ export function MinistryReports() {
   }
 
   async function onReportSubmit(values: ReportFormValues) {
-    if (!userMinistry || !canEdit || !profile) return;
+    if (!canEdit || !profile) return;
+
+    // Try to find the ministry the user leads, or get from first submitted report
+    let ministryId = userMinistry?.id;
+    
+    if (!ministryId && reports.length > 0) {
+      ministryId = reports[0].ministry_id;
+    }
+    
+    if (!ministryId) {
+      toast.error('No ministry found. Please contact an administrator to assign you to a ministry.');
+      return;
+    }
 
     try {
       const input: any = {
-        ministry_id: userMinistry.id,
+        ministry_id: ministryId,
         report_period: values.report_period,
         report_type: values.report_type,
         title: values.title,
@@ -143,7 +202,7 @@ export function MinistryReports() {
         await createMinistryReport(input, profile.id);
         toast.success('Report submitted');
       }
-      queryClient.invalidateQueries({ queryKey: ['ministry-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['ministry-leader-reports'] });
       setReportModalOpen(false);
     } catch (err) {
       toast.error((err as Error).message);
@@ -156,21 +215,32 @@ export function MinistryReports() {
 
     try {
       await deleteMinistryReport(report.id);
-      queryClient.invalidateQueries({ queryKey: ['ministry-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['ministry-leader-reports'] });
       toast.success('Report deleted');
     } catch (err) {
       toast.error((err as Error).message);
     }
   }
 
-  if (!userMinistry) {
+  // Show loading state
+  if (reportsQuery.isLoading) {
+    return (
+      <div className="space-y-5">
+        <h1 className="text-2xl font-bold text-ink">Ministry Reports</h1>
+        <Spinner />
+      </div>
+    );
+  }
+
+  // Show empty state only if the user has no reports and no ministry assignment
+  if (!userMinistry && reports.length === 0) {
     return (
       <div className="space-y-5">
         <h1 className="text-2xl font-bold text-ink">Ministry Reports</h1>
         <EmptyState
           icon={FileText}
           title="No ministry assigned"
-          description="You need to be assigned as a ministry leader to access this page"
+          description="Contact an administrator to assign you as a ministry leader"
         />
       </div>
     );
@@ -189,7 +259,9 @@ export function MinistryReports() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-ink">Ministry Reports</h1>
-            <p className="text-sm text-slate-500">{userMinistry.name}</p>
+            <p className="text-sm text-slate-500">
+              {userMinistry?.name || (reports.length > 0 ? reports[0].ministry_name : 'My Reports')}
+            </p>
           </div>
         </div>
         {canEdit && (
@@ -199,9 +271,7 @@ export function MinistryReports() {
         )}
       </div>
 
-      {reportsQuery.isLoading ? (
-        <Spinner />
-      ) : reports.length === 0 ? (
+      {reports.length === 0 ? (
         <EmptyState
           icon={FileText}
           title="No reports yet"
