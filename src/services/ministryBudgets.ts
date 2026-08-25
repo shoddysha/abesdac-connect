@@ -105,24 +105,7 @@ export async function submitMinistryBudget(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Acknowledge a budget (admin/secretary only) */
-export async function acknowledgeMinistryBudget(
-  id: string,
-  acknowledgedBy: string,
-  note?: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from('ministry_budgets')
-    .update({
-      acknowledged_at: new Date().toISOString(),
-      acknowledged_by: acknowledgedBy,
-      acknowledgement_note: note || null,
-    })
-    .eq('id', id);
-  if (error) throw error;
-}
-
-/** Delete a budget (all roles allowed) */
+/** Delete a budget */
 export async function deleteMinistryBudget(id: string): Promise<void> {
   const { error } = await supabase.from('ministry_budgets').delete().eq('id', id);
   if (error) throw error;

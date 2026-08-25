@@ -23,7 +23,6 @@ import {
   TrendingUp,
   ChevronDown,
   ChevronUp,
-  CheckCircle,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -553,22 +552,6 @@ export function MinistryDashboard() {
               const isExpanded = expandedBudget === budget.id;
               return (
                 <div key={budget.id} className="rounded-lg border border-slate-100 overflow-hidden">
-                  {/* Acknowledgement banner */}
-                  {budget.acknowledged_at && (
-                    <div className="mx-4 mt-3 p-2 rounded-lg bg-green-50 border border-green-200 flex items-start gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-green-800">Acknowledged by Church Leadership</p>
-                        <p className="text-xs text-green-700">
-                          {format(new Date(budget.acknowledged_at), 'MMM d, yyyy')}
-                        </p>
-                        {budget.acknowledgement_note && (
-                          <p className="text-xs text-green-600 mt-1">{budget.acknowledgement_note}</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Budget row header */}
                   <div
                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 cursor-pointer hover:bg-slate-50"
@@ -634,25 +617,28 @@ export function MinistryDashboard() {
 
                       {/* Actions */}
                       <div className="flex flex-wrap gap-2 pt-1">
-                        {budget.status === 'draft' ? (
+                        {budget.status === 'draft' && (
                           <Button
                             size="sm"
                             onClick={() => handleSubmitBudget(budget.id)}
                           >
                             <Send className="h-3.5 w-3.5" /> Submit for Review
                           </Button>
-                        ) : budget.submitted_at ? (
+                        )}
+                        {budget.status === 'submitted' && budget.submitted_at && (
                           <p className="text-xs text-emerald-600 font-medium self-center">
                             ✓ Submitted {format(new Date(budget.submitted_at), 'MMM d, yyyy')}
                           </p>
-                        ) : null}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteBudget(budget.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" /> Delete
-                        </Button>
+                        )}
+                        {budget.status === 'draft' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteBudget(budget.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Delete
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
