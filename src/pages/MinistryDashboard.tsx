@@ -352,7 +352,7 @@ export function MinistryDashboard() {
             <Button
               variant="outline"
               className="h-auto flex-col gap-2 py-4"
-              onClick={() => navigate('/ministry-reports')}
+              onClick={() => navigate('/submit-ministry-report')}
             >
               <FileText className="h-5 w-5" />
               <span className="text-sm text-center">Submit Report</span>

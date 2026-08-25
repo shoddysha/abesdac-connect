@@ -1,13 +1,8 @@
-import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import toast from 'react-hot-toast';
 import {
   Plus,
-  Pencil,
   Trash2,
   FileText,
   Calendar,
@@ -17,10 +12,8 @@ import {
   ArrowLeft,
   CheckCircle,
 } from 'lucide-react';
-import { Card, CardHeader } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input, Select, Textarea } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,36 +21,15 @@ import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { fetchMinistries } from '@/services/ministries';
 import { supabase } from '@/lib/supabase';
 import {
-  fetchMinistryReports,
-  createMinistryReport,
-  updateMinistryReport,
   deleteMinistryReport,
-  generateReportPeriods,
   type MinistryReportWithDetails,
 } from '@/services/ministryReports';
-import type { ReportType } from '@/types/database';
 import { format } from 'date-fns';
-
-const reportSchema = z.object({
-  report_period: z.string().min(1, 'Required'),
-  report_type: z.enum(['monthly', 'quarterly', 'annual', 'special']),
-  title: z.string().min(1, 'Required'),
-  summary: z.string().optional(),
-  achievements: z.string().optional(),
-  challenges: z.string().optional(),
-  attendance_count: z.string().optional(),
-  expenses: z.string().optional(),
-  future_plans: z.string().optional(),
-});
-type ReportFormValues = z.infer<typeof reportSchema>;
 
 export function MinistryReports() {
   const { profile, hasRole } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [editingReport, setEditingReport] = useState<MinistryReportWithDetails | null>(null);
 
   const canEdit = hasRole('ministry_leader'); // Only ministry leaders can edit
 
@@ -125,90 +97,6 @@ export function MinistryReports() {
   console.log('⏳ Query loading:', reportsQuery.isLoading);
   console.log('❌ Query error:', reportsQuery.error);
 
-  const reportForm = useForm<ReportFormValues>({
-    resolver: zodResolver(reportSchema),
-    defaultValues: { report_type: 'monthly' },
-  });
-
-  const reportType = reportForm.watch('report_type');
-  const reportPeriods = generateReportPeriods(reportType);
-
-  function openReportModal(report?: MinistryReportWithDetails) {
-    if (!canEdit) return;
-
-    if (report) {
-      setEditingReport(report);
-      reportForm.reset({
-        report_period: report.report_period,
-        report_type: report.report_type,
-        title: report.title,
-        summary: report.summary || '',
-        achievements: report.achievements || '',
-        challenges: report.challenges || '',
-        attendance_count: report.attendance_count?.toString() || '',
-        expenses: report.expenses?.toString() || '',
-        future_plans: report.future_plans || '',
-      });
-    } else {
-      setEditingReport(null);
-      reportForm.reset({
-        report_period: '',
-        report_type: 'monthly',
-        title: '',
-        summary: '',
-        achievements: '',
-        challenges: '',
-        attendance_count: '',
-        expenses: '',
-        future_plans: '',
-      });
-    }
-    setReportModalOpen(true);
-  }
-
-  async function onReportSubmit(values: ReportFormValues) {
-    if (!canEdit || !profile) return;
-
-    // Try to find the ministry the user leads, or get from first submitted report
-    let ministryId = userMinistry?.id;
-    
-    if (!ministryId && reports.length > 0) {
-      ministryId = reports[0].ministry_id;
-    }
-    
-    if (!ministryId) {
-      toast.error('No ministry found. Please contact an administrator to assign you to a ministry.');
-      return;
-    }
-
-    try {
-      const input: any = {
-        ministry_id: ministryId,
-        report_period: values.report_period,
-        report_type: values.report_type,
-        title: values.title,
-        summary: values.summary,
-        achievements: values.achievements,
-        challenges: values.challenges,
-        attendance_count: values.attendance_count ? parseInt(values.attendance_count) : undefined,
-        expenses: values.expenses ? parseFloat(values.expenses) : undefined,
-        future_plans: values.future_plans,
-      };
-
-      if (editingReport) {
-        await updateMinistryReport(editingReport.id, input);
-        toast.success('Report updated');
-      } else {
-        await createMinistryReport(input, profile.id);
-        toast.success('Report submitted');
-      }
-      queryClient.invalidateQueries({ queryKey: ['ministry-leader-reports'] });
-      setReportModalOpen(false);
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
-
   async function handleDeleteReport(report: MinistryReportWithDetails) {
     if (!canEdit) return;
     if (!confirm(`Delete report "${report.title}"?`)) return;
@@ -265,7 +153,7 @@ export function MinistryReports() {
           </div>
         </div>
         {canEdit && (
-          <Button onClick={() => openReportModal()}>
+          <Button onClick={() => navigate('/submit-ministry-report')}>
             <Plus className="h-4 w-4" /> Submit Report
           </Button>
         )}
@@ -319,9 +207,6 @@ export function MinistryReports() {
                 )}
                 {canEdit && !report.acknowledged_at && (
                   <div className="flex gap-1 shrink-0">
-                    <Button variant="ghost" size="sm" onClick={() => openReportModal(report)}>
-                      <Pencil className="h-3 w-3" />
-                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleDeleteReport(report)}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -393,100 +278,6 @@ export function MinistryReports() {
           ))}
         </div>
       )}
-
-      {/* Report Modal */}
-      <Modal
-        open={reportModalOpen}
-        onClose={() => setReportModalOpen(false)}
-        title={editingReport ? 'Edit Report' : 'Submit Report'}
-        size="lg"
-      >
-        <form onSubmit={reportForm.handleSubmit(onReportSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Report Type"
-              options={[
-                { value: 'monthly', label: 'Monthly' },
-                { value: 'quarterly', label: 'Quarterly' },
-                { value: 'annual', label: 'Annual' },
-                { value: 'special', label: 'Special' },
-              ]}
-              {...reportForm.register('report_type')}
-            />
-
-            <Select
-              label="Report Period"
-              options={[
-                { value: '', label: 'Select period' },
-                ...reportPeriods.map((p) => ({ value: p, label: p })),
-              ]}
-              {...reportForm.register('report_period')}
-              error={reportForm.formState.errors.report_period?.message}
-            />
-          </div>
-
-          <Input
-            label="Report Title"
-            placeholder="e.g., January 2025 Ministry Report"
-            {...reportForm.register('title')}
-            error={reportForm.formState.errors.title?.message}
-          />
-
-          <Textarea
-            label="Summary"
-            placeholder="Brief overview of the reporting period"
-            rows={2}
-            {...reportForm.register('summary')}
-          />
-
-          <Textarea
-            label="Achievements"
-            placeholder="What was accomplished this period?"
-            rows={3}
-            {...reportForm.register('achievements')}
-          />
-
-          <Textarea
-            label="Challenges"
-            placeholder="What challenges were faced?"
-            rows={3}
-            {...reportForm.register('challenges')}
-          />
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              type="number"
-              label="Attendance Count"
-              placeholder="Total attendance"
-              {...reportForm.register('attendance_count')}
-            />
-
-            <Input
-              type="number"
-              step="0.01"
-              label="Expenses (GH₵)"
-              placeholder="0.00"
-              {...reportForm.register('expenses')}
-            />
-          </div>
-
-          <Textarea
-            label="Future Plans"
-            placeholder="Plans and goals for next period"
-            rows={3}
-            {...reportForm.register('future_plans')}
-          />
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setReportModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={reportForm.formState.isSubmitting}>
-              {editingReport ? 'Save Changes' : 'Submit Report'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 }

@@ -476,7 +476,7 @@ export function Dashboard() {
               </Button>
             </Link>
             {hasRole('ministry_leader') && (
-              <Link to="/ministry-reports">
+              <Link to="/submit-ministry-report">
                 <Button variant="outline" className="w-full justify-start">
                   <FileText className="h-4 w-4" /> <span className="truncate">Submit Report</span>
                 </Button>
