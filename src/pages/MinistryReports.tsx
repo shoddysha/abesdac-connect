@@ -15,6 +15,7 @@ import {
   Users as UsersIcon,
   DollarSign,
   ArrowLeft,
+  CheckCircle,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -34,6 +35,7 @@ import {
   type MinistryReportWithDetails,
 } from '@/services/ministryReports';
 import type { ReportType } from '@/types/database';
+import { format } from 'date-fns';
 
 const reportSchema = z.object({
   report_period: z.string().min(1, 'Required'),
@@ -209,6 +211,22 @@ export function MinistryReports() {
         <div className="grid gap-4 md:grid-cols-2">
           {reports.map((report) => (
             <Card key={report.id}>
+              {/* Acknowledgement banner */}
+              {report.acknowledged_at && (
+                <div className="mb-3 p-2 rounded-lg bg-green-50 border border-green-200 flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-green-800">Acknowledged by Church Leadership</p>
+                    <p className="text-xs text-green-700">
+                      {format(new Date(report.acknowledged_at), 'MMM d, yyyy')}
+                    </p>
+                    {report.acknowledgement_note && (
+                      <p className="text-xs text-green-600 mt-1">{report.acknowledgement_note}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
@@ -222,7 +240,14 @@ export function MinistryReports() {
                     </span>
                   </div>
                 </div>
-                {canEdit && (
+                {canEdit && report.acknowledged_at && (
+                  <div className="flex gap-1 shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteReport(report)} title="Delete acknowledged report">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+                {canEdit && !report.acknowledged_at && (
                   <div className="flex gap-1 shrink-0">
                     <Button variant="ghost" size="sm" onClick={() => openReportModal(report)}>
                       <Pencil className="h-3 w-3" />

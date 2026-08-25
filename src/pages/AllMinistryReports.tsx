@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText,
   Calendar,
@@ -11,18 +11,23 @@ import {
   PiggyBank,
   ChevronDown,
   ChevronUp,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
-import { Select } from '@/components/ui/Input';
+import { Input, Select, Textarea } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
-import { fetchAllMinistryReports } from '@/services/ministryReports';
+import { fetchAllMinistryReports, acknowledgeMinistryReport, unacknowledgeMinistryReport } from '@/services/ministryReports';
 import { fetchMinistries } from '@/services/ministries';
 import { fetchAllMinistryBudgets } from '@/services/ministryBudgets';
 import type { MinistryBudgetWithDetails } from '@/services/ministryBudgets';
 import { format } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 const BUDGET_TYPE_LABELS: Record<string, string> = {
   annual: 'Annual',
@@ -33,12 +38,17 @@ const BUDGET_TYPE_LABELS: Record<string, string> = {
 };
 
 export function AllMinistryReports() {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedMinistry, setSelectedMinistry] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
   // Tracks which ministry's budget panel is open (ministry_id or null)
   const [openBudgetPanel, setOpenBudgetPanel] = useState<string | null>(null);
   // Tracks which individual budget's line items are expanded
   const [expandedBudget, setExpandedBudget] = useState<string | null>(null);
+  // Acknowledge modal state
+  const [ackModal, setAckModal] = useState<{ reportId: string } | null>(null);
+  const [ackNote, setAckNote] = useState('');
 
   const reportsQuery = useQuery({
     queryKey: ['all-ministry-reports'],
@@ -61,6 +71,32 @@ export function AllMinistryReports() {
   const reports = reportsQuery.data ?? [];
   const ministries = ministriesQuery.data ?? [];
   const allBudgets: MinistryBudgetWithDetails[] = budgetsQuery.data ?? [];
+
+  // Mutations
+  const acknowledgeMutation = useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string }) =>
+      acknowledgeMinistryReport(id, profile?.id || '', note),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['all-ministry-reports'] });
+      setAckModal(null);
+      setAckNote('');
+      toast.success('Report acknowledged');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const unacknowledgeMutation = useMutation({
+    mutationFn: unacknowledgeMinistryReport,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['all-ministry-reports'] });
+      toast.success('Acknowledgement removed');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
 
   // ── Filter reports ────────────────────────────────────────────────────────
   const filteredReports = reports.filter((report) => {
@@ -328,6 +364,22 @@ export function AllMinistryReports() {
                 <div className="grid gap-4 md:grid-cols-2">
                   {group.reports.map((report) => (
                     <Card key={report.id}>
+                      {/* Acknowledgement banner */}
+                      {report.acknowledged_at && (
+                        <div className="mb-3 p-2 rounded-lg bg-green-50 border border-green-200 flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-green-800">Acknowledged</p>
+                            <p className="text-xs text-green-700">
+                              {format(new Date(report.acknowledged_at), 'MMM d, yyyy')}
+                            </p>
+                            {report.acknowledgement_note && (
+                              <p className="text-xs text-green-600 mt-1">{report.acknowledgement_note}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex-1">
                           <h3 className="font-semibold text-ink mb-1">{report.title}</h3>
@@ -400,6 +452,31 @@ export function AllMinistryReports() {
                         Submitted: {new Date(report.submitted_at).toLocaleDateString()}
                         {report.submitter_name ? ` by ${report.submitter_name}` : ''}
                       </p>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+                        {!report.acknowledged_at ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setAckModal({ reportId: report.id })}
+                            disabled={acknowledgeMutation.isPending}
+                          >
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            Acknowledge
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => unacknowledgeMutation.mutate(report.id)}
+                            disabled={unacknowledgeMutation.isPending}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Unacknowledge
+                          </Button>
+                        )}
+                      </div>
                     </Card>
                   ))}
                 </div>
@@ -516,6 +593,55 @@ export function AllMinistryReports() {
             })}
         </div>
       )}
+
+      {/* Acknowledgement Modal */}
+      <Modal
+        open={!!ackModal}
+        onClose={() => {
+          setAckModal(null);
+          setAckNote('');
+        }}
+        title="Acknowledge Report"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Add an optional message to the ministry leader about this report acknowledgement.
+          </p>
+          <Textarea
+            label="Note (Optional)"
+            placeholder="e.g., Report approved. Budget allocated."
+            value={ackNote}
+            onChange={(e) => setAckNote(e.target.value)}
+            rows={3}
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAckModal(null);
+                setAckNote('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (ackModal) {
+                  acknowledgeMutation.mutate({
+                    id: ackModal.reportId,
+                    note: ackNote || undefined,
+                  });
+                }
+              }}
+              isLoading={acknowledgeMutation.isPending}
+            >
+              <CheckCircle className="h-4 w-4" />
+              Acknowledge
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
