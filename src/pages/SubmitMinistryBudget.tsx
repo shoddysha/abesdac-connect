@@ -132,7 +132,14 @@ export function SubmitMinistryBudget() {
           : values.budget_period || '',
         period_type: values.period_type as any,
         event_id: values.period_type === 'special' ? values.event_id : undefined,
-        items: values.items as BudgetItemInput[],
+        items: values.items.map((item) => ({
+          item_name: item.item_name,
+          description: item.description,
+          quantity: Number(item.quantity),
+          unit_cost: Number(item.unit_cost),
+          category: item.category,
+          priority: item.priority,
+        })),
       };
 
       await createMinistryBudget(input, profile.id);

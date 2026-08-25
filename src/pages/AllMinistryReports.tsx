@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tantml:react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText,
   Calendar,
@@ -60,7 +60,7 @@ export function AllMinistryReports() {
   const budgets = budgetsQuery.data ?? [];
   
   // Count pending budgets
-  const pendingBudgetsCount = budgets.filter((b) => b.status === 'pending').length;
+  const pendingBudgetsCount = budgets.filter((b: any) => b.status === 'pending').length;
 
   const acknowledgeMutation = useMutation({
     mutationFn: ({ id, note }: { id: string; note?: string }) =>
@@ -98,13 +98,13 @@ export function AllMinistryReports() {
     },
   });
 
-  const filteredReports = reports.filter((report) => {
+  const filteredReports = reports.filter((report: any) => {
     if (selectedMinistry !== 'all' && report.ministry_id !== selectedMinistry) return false;
     if (selectedType !== 'all' && report.report_type !== selectedType) return false;
     return true;
   });
 
-  const reportsByMinistry = filteredReports.reduce((acc, report) => {
+  const reportsByMinistry = filteredReports.reduce((acc: any, report: any) => {
     if (!acc[report.ministry_id]) {
       acc[report.ministry_id] = {
         ministry_name: report.ministry_name || 'Unknown',
@@ -121,7 +121,7 @@ export function AllMinistryReports() {
       'Achievements', 'Challenges', 'Attendance', 'Expenses',
       'Future Plans', 'Submitted By', 'Submitted At',
     ];
-    const rows = filteredReports.map((r) => [
+    const rows = filteredReports.map((r: any) => [
       r.ministry_name || '',
       r.report_period,
       r.report_type,
@@ -136,7 +136,7 @@ export function AllMinistryReports() {
       new Date(r.submitted_at).toLocaleDateString(),
     ]);
     const csv = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .map((row: any) => row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -185,7 +185,7 @@ export function AllMinistryReports() {
               onChange={(e) => setSelectedMinistry(e.target.value)}
               options={[
                 { value: 'all', label: 'All Ministries' },
-                ...ministries.map((m) => ({ value: m.id, label: m.name })),
+                ...ministries.map((m: any) => ({ value: m.id, label: m.name })),
               ]}
             />
             <Select
@@ -212,7 +212,7 @@ export function AllMinistryReports() {
           <p className="text-sm text-slate-500">This Month</p>
           <p className="text-2xl font-bold text-secondary">
             {filteredReports.filter(
-              (r) =>
+              (r: any) =>
                 new Date(r.submitted_at).getMonth() === new Date().getMonth() &&
                 new Date(r.submitted_at).getFullYear() === new Date().getFullYear(),
             ).length}
@@ -225,7 +225,7 @@ export function AllMinistryReports() {
         <Card className="p-4">
           <p className="text-sm text-slate-500">Total Expenses</p>
           <p className="text-2xl font-bold text-ink">
-            GH₵{filteredReports.reduce((sum, r) => sum + (r.expenses || 0), 0).toFixed(2)}
+            GH₵{filteredReports.reduce((sum: any, r: any) => sum + (r.expenses || 0), 0).toFixed(2)}
           </p>
         </Card>
       </div>
@@ -240,7 +240,7 @@ export function AllMinistryReports() {
         />
       ) : (
         <div className="space-y-8">
-          {Object.entries(reportsByMinistry).map(([ministryId, group]) => (
+          {Object.entries(reportsByMinistry).map(([ministryId, group]: [string, any]) => (
             <div key={ministryId}>
               <div className="flex flex-wrap items-center gap-3 mb-3">
                 <h2 className="text-lg font-semibold text-ink">{group.ministry_name}</h2>
@@ -248,7 +248,7 @@ export function AllMinistryReports() {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                {group.reports.map((report) => (
+                {group.reports.map((report: any) => (
                   <Card key={report.id}>
                     {report.acknowledged_at && (
                       <div className="mb-3 p-2 rounded-lg bg-green-50 border border-green-200 flex items-start gap-2">

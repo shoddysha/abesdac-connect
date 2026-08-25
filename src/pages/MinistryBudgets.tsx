@@ -96,7 +96,7 @@ export function MinistryBudgets() {
     if (!selectedBudget || !reviewAction || !profile) return;
     reviewMutation.mutate({
       id: selectedBudget,
-      status: reviewAction,
+      status: reviewAction === 'approve' ? 'approved' : 'rejected',
       note: reviewNote,
     });
   }
@@ -179,14 +179,14 @@ export function MinistryBudgets() {
                       <p className="text-sm text-slate-600 mt-1">{budget.ministry_name}</p>
                     </div>
                     <Badge
-                      variant={
+                      tone={
                         budget.status === 'approved'
-                          ? 'success'
+                          ? 'green'
                           : budget.status === 'rejected'
-                          ? 'error'
+                          ? 'red'
                           : budget.status === 'allocated'
-                          ? 'info'
-                          : 'warning'
+                          ? 'blue'
+                          : 'yellow'
                       }
                     >
                       {budget.status}
@@ -255,7 +255,6 @@ export function MinistryBudgets() {
                     <>
                       <Button
                         size="sm"
-                        variant="success"
                         onClick={() => {
                           setSelectedBudget(budget.id);
                           setReviewAction('approve');
@@ -266,7 +265,7 @@ export function MinistryBudgets() {
                       </Button>
                       <Button
                         size="sm"
-                        variant="error"
+                        variant="outline"
                         onClick={() => {
                           setSelectedBudget(budget.id);
                           setReviewAction('reject');
@@ -294,7 +293,7 @@ export function MinistryBudgets() {
 
       {/* Budget Details Modal */}
       <Modal
-        isOpen={!!selectedBudget && !reviewAction}
+        open={!!selectedBudget && !reviewAction}
         onClose={() => setSelectedBudget(null)}
         title="Budget Details"
         size="lg"
@@ -311,12 +310,12 @@ export function MinistryBudgets() {
               <div>
                 <p className="text-sm text-slate-500">Status</p>
                 <Badge
-                  variant={
+                  tone={
                     budgetDetailsQuery.data.status === 'approved'
-                      ? 'success'
+                      ? 'green'
                       : budgetDetailsQuery.data.status === 'rejected'
-                      ? 'error'
-                      : 'warning'
+                      ? 'red'
+                      : 'yellow'
                   }
                 >
                   {budgetDetailsQuery.data.status}
@@ -378,7 +377,7 @@ export function MinistryBudgets() {
 
       {/* Review Modal */}
       <Modal
-        isOpen={!!reviewAction}
+        open={!!reviewAction}
         onClose={() => {
           setReviewAction(null);
           setReviewNote('');
@@ -409,7 +408,7 @@ export function MinistryBudgets() {
               Cancel
             </Button>
             <Button
-              variant={reviewAction === 'approve' ? 'success' : 'error'}
+              variant={reviewAction === 'approve' ? 'default' : 'outline'}
               onClick={handleReview}
               isLoading={reviewMutation.isPending}
             >
