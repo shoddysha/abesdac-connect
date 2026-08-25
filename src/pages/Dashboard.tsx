@@ -1,7 +1,22 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tantml:react-query';
 import { Link } from 'react-router-dom';
-import { Users, UserCheck, CalendarDays, Activity, UserPlus, ClipboardCheck, Megaphone, Cake, UserPlus2 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { 
+  Users, 
+  UserCheck, 
+  CalendarDays, 
+  Activity, 
+  UserPlus, 
+  ClipboardCheck, 
+  Megaphone, 
+  Cake, 
+  UserPlus2,
+  FileText,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  Building2,
+} from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { StatCard } from '@/components/ui/StatCard';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
@@ -13,13 +28,15 @@ import { fetchEvents } from '@/services/events';
 import { fetchAuditLogs } from '@/services/audit';
 import { fetchUpcomingBirthdays } from '@/services/birthdays';
 import { fetchUnfollowedVisitors } from '@/services/visitors';
+import { fetchAllMinistryReports } from '@/services/ministryReports';
+import { supabase } from '@/lib/supabase';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
-import { format, isFuture, formatDistanceToNow } from 'date-fns';
+import { format, isFuture, formatDistanceToNow, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
 const GENDER_COLORS = ['#1E5EFF', '#D4A76A'];
 
 export function Dashboard() {
-  const { hasRole } = useAuth();
+  const { hasRole, profile } = useAuth();
   
   const statsQuery = useQuery({ queryKey: ['member-stats'], queryFn: fetchMemberStats });
   const eventsQuery = useQuery({ queryKey: ['events'], queryFn: fetchEvents });
@@ -27,16 +44,66 @@ export function Dashboard() {
   const birthdaysQuery = useQuery({ queryKey: ['upcoming-birthdays'], queryFn: fetchUpcomingBirthdays });
   const visitorsQuery = useQuery({ queryKey: ['unfollowed-visitors'], queryFn: fetchUnfollowedVisitors });
 
+  // New queries for enhanced features
+  const reportsQuery = useQuery({
+    queryKey: ['dashboard-reports'],
+    queryFn: fetchAllMinistryReports,
+    enabled: hasRole('administrator', 'secretary'),
+  });
+
+  const attendanceQuery = useQuery({
+    queryKey: ['dashboard-attendance-trend'],
+    queryFn: async () => {
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const date = subMonths(new Date(), i);
+        const start = startOfMonth(date);
+        const end = endOfMonth(date);
+        
+        const { data, error } = await supabase
+          .from('attendance')
+          .select('id')
+          .gte('service_date', start.toISOString().split('T')[0])
+          .lte('service_date', end.toISOString().split('T')[0]);
+        
+        if (error) throw error;
+        
+        months.push({
+          month: format(date, 'MMM'),
+          count: data?.length || 0,
+        });
+      }
+      return months;
+    },
+  });
+
+  const ministriesQuery = useQuery({
+    queryKey: ['dashboard-ministries'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ministries')
+        .select('id, name, is_active');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   useRealtimeQuery('members', ['member-stats']);
   useRealtimeQuery('members', ['upcoming-birthdays']);
   useRealtimeQuery('events', ['events']);
   useRealtimeQuery('audit_logs', ['audit-logs', 'recent']);
   useRealtimeQuery('visitors', ['unfollowed-visitors']);
+  useRealtimeQuery('ministry_reports', ['dashboard-reports']);
 
   const stats = statsQuery.data;
   const upcomingEvents = (eventsQuery.data ?? []).filter((e) => isFuture(new Date(e.start_time))).slice(0, 5);
   const upcomingBirthdays = (birthdaysQuery.data ?? []).slice(0, 7);
   const unfollowedVisitors = (visitorsQuery.data ?? []).slice(0, 5);
+  const reports = reportsQuery.data ?? [];
+  const ministries = ministriesQuery.data ?? [];
+  
+  const pendingReports = reports.filter(r => !r.acknowledged_at);
+  const acknowledgedReports = reports.filter(r => r.acknowledged_at);
 
   const genderData = stats
     ? [
@@ -45,35 +112,137 @@ export function Dashboard() {
       ]
     : [];
 
+  const attendanceTrend = attendanceQuery.data ?? [];
+
   return (
     <div className="space-y-6">
+      {/* Header with greeting */}
       <div>
-        <h1 className="text-2xl font-bold text-ink">Dashboard</h1>
-        <p className="text-sm text-slate-500">Welcome back — here's what's happening at Abeka SDA Church.</p>
+        <h1 className="text-2xl font-bold text-ink">
+          Welcome back, {profile?.full_name?.split(' ')[0] || 'User'}!
+        </h1>
+        <p className="text-sm text-slate-500">Here's what's happening at Abeka SDA Church today.</p>
       </div>
 
+      {/* Key Stats */}
       {statsQuery.isLoading ? (
         <Spinner />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Total members" value={stats?.total ?? 0} icon={Users} tone="primary" />
-          <StatCard label="Active members" value={stats?.active ?? 0} icon={UserCheck} tone="secondary" />
-          <StatCard label="Male members" value={stats?.male ?? 0} icon={Users} tone="primary" />
-          <StatCard label="Female members" value={stats?.female ?? 0} icon={Users} tone="accent" />
+          <StatCard label="Total Members" value={stats?.total ?? 0} icon={Users} tone="primary" />
+          <StatCard label="Active Members" value={stats?.active ?? 0} icon={UserCheck} tone="secondary" />
+          <StatCard 
+            label="Active Ministries" 
+            value={ministries.filter(m => m.is_active).length} 
+            icon={Building2} 
+            tone="accent" 
+          />
+          <StatCard 
+            label="Upcoming Events" 
+            value={upcomingEvents.length} 
+            icon={CalendarDays} 
+            tone="primary" 
+          />
         </div>
       )}
 
+      {/* Alerts & Notifications Row */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Visitors needing follow-up */}
+        {unfollowedVisitors.length > 0 && (
+          <Card className="border-l-4 border-l-amber-500">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-ink">Visitors Need Follow-up</h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  {unfollowedVisitors.length} first-time visitor{unfollowedVisitors.length !== 1 ? 's' : ''} waiting for contact
+                </p>
+                <Link to="/visitors">
+                  <Button size="sm" variant="outline" className="mt-2">
+                    View All
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Pending ministry reports (admin/secretary only) */}
+        {hasRole('administrator', 'secretary') && pendingReports.length > 0 && (
+          <Card className="border-l-4 border-l-blue-500">
+            <div className="flex items-start gap-3">
+              <Clock className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-ink">Reports Pending Review</h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  {pendingReports.length} ministry report{pendingReports.length !== 1 ? 's' : ''} awaiting acknowledgement
+                </p>
+                <Link to="/ministry-reports">
+                  <Button size="sm" variant="outline" className="mt-2">
+                    Review Reports
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Upcoming birthdays this week */}
+        {upcomingBirthdays.filter(b => b.days_until <= 7).length > 0 && (
+          <Card className="border-l-4 border-l-green-500">
+            <div className="flex items-start gap-3">
+              <Cake className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-ink">Birthdays This Week</h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  {upcomingBirthdays.filter(b => b.days_until <= 7).length} member{upcomingBirthdays.filter(b => b.days_until <= 7).length !== 1 ? 's' : ''} celebrating
+                </p>
+                <div className="mt-2 text-xs text-slate-500">
+                  {upcomingBirthdays.filter(b => b.days_until <= 7).slice(0, 3).map((b) => (
+                    <div key={b.id}>{b.first_name} {b.last_name}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
+
+      {/* Attendance Trend Chart */}
+      {hasRole('administrator', 'secretary') && (
+        <Card>
+          <CardHeader title="Attendance Trend (Last 6 Months)" />
+          {attendanceQuery.isLoading ? (
+            <Spinner />
+          ) : attendanceTrend.length > 0 ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={attendanceTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Bar dataKey="count" fill="#1E5EFF" name="Attendance" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="py-10 text-center text-sm text-slate-400">No attendance data yet</p>
+          )}
+        </Card>
+      )}
+
+      {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader 
-            title="First-time visitors" 
+            title="First-Time Visitors" 
             action={
               <div className="flex flex-wrap items-center gap-2">
                 {unfollowedVisitors.length > 0 && (
                   <Badge tone="amber">{unfollowedVisitors.length} need follow-up</Badge>
                 )}
                 <Link to="/visitors" className="text-sm font-medium text-secondary hover:underline">
-                  View all
+                  View All
                 </Link>
               </div>
             } 
@@ -83,7 +252,7 @@ export function Dashboard() {
           ) : unfollowedVisitors.length === 0 ? (
             <EmptyState 
               icon={UserPlus2} 
-              title="All caught up!" 
+              title="All Caught Up!" 
               description="No visitors waiting for follow-up." 
             />
           ) : (
@@ -113,9 +282,9 @@ export function Dashboard() {
         </Card>
 
         <Card className="lg:col-span-1">
-          <CardHeader title="Upcoming events" action={<Link to="/events" className="text-sm font-medium text-secondary hover:underline">View all</Link>} />
+          <CardHeader title="Upcoming Events" action={<Link to="/events" className="text-sm font-medium text-secondary hover:underline">View All</Link>} />
           {upcomingEvents.length === 0 ? (
-            <EmptyState icon={CalendarDays} title="No upcoming events" description="Create one from the Events page." />
+            <EmptyState icon={CalendarDays} title="No Upcoming Events" description="Create one from the Events page." />
           ) : (
             <div className="space-y-3">
               {upcomingEvents.map((event) => (
@@ -134,14 +303,48 @@ export function Dashboard() {
         </Card>
       </div>
 
+      {/* Ministry Reports Overview (Admin/Secretary only) */}
+      {hasRole('administrator', 'secretary') && (
+        <Card>
+          <CardHeader 
+            title="Ministry Reports Overview" 
+            action={<Link to="/ministry-reports" className="text-sm font-medium text-secondary hover:underline">View All</Link>}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+              <FileText className="h-8 w-8 text-blue-600" />
+              <div>
+                <p className="text-2xl font-bold text-blue-900">{reports.length}</p>
+                <p className="text-xs text-blue-600">Total Reports</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg">
+              <Clock className="h-8 w-8 text-amber-600" />
+              <div>
+                <p className="text-2xl font-bold text-amber-900">{pendingReports.length}</p>
+                <p className="text-xs text-amber-600">Pending Review</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+              <CheckCircle className="h-8 w-8 text-green-600" />
+              <div>
+                <p className="text-2xl font-bold text-green-900">{acknowledgedReports.length}</p>
+                <p className="text-xs text-green-600">Acknowledged</p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Activity & Birthdays */}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader 
-            title="Recent activity" 
+            title="Recent Activity" 
             action={
               hasRole('administrator', 'secretary', 'ministry_leader') ? (
                 <Link to="/audit-logs" className="text-sm font-medium text-secondary hover:underline">
-                  View all
+                  View All
                 </Link>
               ) : undefined
             }
@@ -163,18 +366,18 @@ export function Dashboard() {
               ))}
             </div>
           ) : (
-            <EmptyState icon={Activity} title="No activity yet" />
+            <EmptyState icon={Activity} title="No Activity Yet" />
           )}
         </Card>
 
         <Card>
-          <CardHeader title="Upcoming birthdays" action={<Cake className="h-4 w-4 text-slate-400" />} />
+          <CardHeader title="Upcoming Birthdays" action={<Cake className="h-4 w-4 text-slate-400" />} />
           {birthdaysQuery.isLoading ? (
             <Spinner />
           ) : birthdaysQuery.error ? (
-            <EmptyState icon={Cake} title="Unable to load birthdays" description="Check that members have birth dates entered." />
+            <EmptyState icon={Cake} title="Unable to Load Birthdays" description="Check that members have birth dates entered." />
           ) : upcomingBirthdays.length === 0 ? (
-            <EmptyState icon={Cake} title="No birthdays soon" description="No member birthdays in the next 30 days." />
+            <EmptyState icon={Cake} title="No Birthdays Soon" description="No member birthdays in the next 30 days." />
           ) : (
             <div className="space-y-2">
               {upcomingBirthdays.map((member) => (
@@ -203,35 +406,43 @@ export function Dashboard() {
         </Card>
       </div>
 
+      {/* Bottom Row - Quick Actions & Stats */}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card>
-          <CardHeader title="Quick actions" />
+          <CardHeader title="Quick Actions" />
           <div className="flex flex-col gap-2">
             <Link to="/members?action=add">
               <Button variant="outline" className="w-full justify-start">
-                <UserPlus className="h-4 w-4" /> <span className="truncate">Add member</span>
+                <UserPlus className="h-4 w-4" /> <span className="truncate">Add Member</span>
               </Button>
             </Link>
             <Link to="/attendance">
               <Button variant="outline" className="w-full justify-start">
-                <ClipboardCheck className="h-4 w-4" /> <span className="truncate">Record attendance</span>
+                <ClipboardCheck className="h-4 w-4" /> <span className="truncate">Record Attendance</span>
               </Button>
             </Link>
             <Link to="/events?action=add">
               <Button variant="outline" className="w-full justify-start">
-                <CalendarDays className="h-4 w-4" /> <span className="truncate">Create event</span>
+                <CalendarDays className="h-4 w-4" /> <span className="truncate">Create Event</span>
               </Button>
             </Link>
             <Link to="/announcements?action=add">
               <Button variant="outline" className="w-full justify-start">
-                <Megaphone className="h-4 w-4" /> <span className="truncate">Post announcement</span>
+                <Megaphone className="h-4 w-4" /> <span className="truncate">Post Announcement</span>
               </Button>
             </Link>
+            {hasRole('ministry_leader') && (
+              <Link to="/ministry-reports">
+                <Button variant="outline" className="w-full justify-start">
+                  <FileText className="h-4 w-4" /> <span className="truncate">Submit Report</span>
+                </Button>
+              </Link>
+            )}
           </div>
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader title="Gender distribution" />
+          <CardHeader title="Gender Distribution" />
           {stats && stats.total > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={200}>
