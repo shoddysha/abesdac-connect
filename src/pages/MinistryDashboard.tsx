@@ -12,6 +12,8 @@ import {
   Target,
   Award,
   TrendingUp,
+  DollarSign,
+  Receipt,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -362,8 +364,16 @@ export function MinistryDashboard() {
               className="h-auto flex-col gap-2 py-4"
               onClick={() => navigate('/submit-ministry-budget')}
             >
-              <TrendingUp className="h-5 w-5" />
+              <DollarSign className="h-5 w-5" />
               <span className="text-sm text-center">Submit Budget</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto flex-col gap-2 py-4"
+              onClick={() => navigate('/my-ministry-budgets')}
+            >
+              <Receipt className="h-5 w-5" />
+              <span className="text-sm text-center">View Budgets</span>
             </Button>
             <Button
               variant="outline"
