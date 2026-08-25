@@ -118,7 +118,7 @@ export function MinistryReports() {
   }
 
   async function onReportSubmit(values: ReportFormValues) {
-    if (!userMinistry || !canEdit) return;
+    if (!userMinistry || !canEdit || !profile) return;
 
     try {
       const input: any = {
@@ -138,7 +138,7 @@ export function MinistryReports() {
         await updateMinistryReport(editingReport.id, input);
         toast.success('Report updated');
       } else {
-        await createMinistryReport(input);
+        await createMinistryReport(input, profile.id);
         toast.success('Report submitted');
       }
       queryClient.invalidateQueries({ queryKey: ['ministry-reports'] });

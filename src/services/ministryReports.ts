@@ -79,7 +79,7 @@ export async function fetchAllMinistryReports(): Promise<MinistryReportWithDetai
 /**
  * Create a new report
  */
-export async function createMinistryReport(input: CreateReportInput): Promise<MinistryReport> {
+export async function createMinistryReport(input: CreateReportInput, submittedBy: string): Promise<MinistryReport> {
   const { data, error } = await supabase
     .from('ministry_reports')
     .insert({
@@ -93,6 +93,7 @@ export async function createMinistryReport(input: CreateReportInput): Promise<Mi
       attendance_count: input.attendance_count || null,
       expenses: input.expenses || null,
       future_plans: input.future_plans || null,
+      submitted_by: submittedBy,
     })
     .select()
     .single();
@@ -120,6 +121,42 @@ export async function deleteMinistryReport(id: string): Promise<void> {
   const { error } = await supabase
     .from('ministry_reports')
     .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+/**
+ * Acknowledge a report (admin/secretary only)
+ */
+export async function acknowledgeMinistryReport(
+  id: string,
+  acknowledgedBy: string,
+  note?: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('ministry_reports')
+    .update({
+      acknowledged_at: new Date().toISOString(),
+      acknowledged_by: acknowledgedBy,
+      acknowledgement_note: note || null,
+    })
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+/**
+ * Remove acknowledgement from a report
+ */
+export async function unacknowledgeMinistryReport(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('ministry_reports')
+    .update({
+      acknowledged_at: null,
+      acknowledged_by: null,
+      acknowledgement_note: null,
+    })
     .eq('id', id);
 
   if (error) throw error;

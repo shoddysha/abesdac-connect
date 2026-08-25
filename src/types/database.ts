@@ -253,6 +253,9 @@ export interface MinistryReport {
   future_plans: string | null;
   submitted_by: string | null;
   submitted_at: string;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  acknowledgement_note: string | null;
   created_at: string;
   updated_at: string;
 }
