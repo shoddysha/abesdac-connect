@@ -58,22 +58,34 @@ export async function fetchMinistryReports(ministryId: string): Promise<Ministry
  * Fetch all reports (for admin/secretary)
  */
 export async function fetchAllMinistryReports(): Promise<MinistryReportWithDetails[]> {
+  console.log('Fetching all ministry reports...');
+  
   const { data, error } = await supabase
     .from('ministry_reports')
     .select(`
       *,
-      ministries(name),
-      profiles(full_name)
+      ministries!ministry_reports_ministry_id_fkey(name),
+      profiles!ministry_reports_submitted_by_fkey(full_name)
     `)
     .order('report_period', { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    console.error('Error fetching all ministry reports:', error);
+    throw error;
+  }
 
-  return (data || []).map((report: any) => ({
+  console.log('Raw data from Supabase:', data);
+  console.log('Fetched reports count:', data?.length || 0);
+  
+  const mapped = (data || []).map((report: any) => ({
     ...report,
     ministry_name: report.ministries?.name,
     submitter_name: report.profiles?.full_name,
   }));
+  
+  console.log('Mapped reports:', mapped);
+  
+  return mapped;
 }
 
 /**
