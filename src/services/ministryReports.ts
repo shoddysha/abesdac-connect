@@ -106,7 +106,6 @@ export async function createMinistryReport(input: CreateReportInput, submittedBy
       challenges: input.challenges || null,
       attendance_count: input.attendance_count || null,
       expenses: input.expenses || null,
-      budget: input.budget || null,
       future_plans: input.future_plans || null,
       submitted_by: submittedBy,
     })

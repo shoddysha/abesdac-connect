@@ -23,8 +23,8 @@ import { format } from 'date-fns';
 const budgetItemSchema = z.object({
   item_name: z.string().min(1, 'Item name is required'),
   description: z.string().optional(),
-  quantity: z.string().min(1, 'Quantity required').transform((val) => parseInt(val)),
-  unit_cost: z.string().min(1, 'Cost required').transform((val) => parseFloat(val)),
+  quantity: z.coerce.number().min(1, 'Quantity must be at least 1'),
+  unit_cost: z.coerce.number().min(0.01, 'Cost must be greater than 0'),
   category: z.string().optional(),
   priority: z.string().optional(),
 });
@@ -72,8 +72,8 @@ export function SubmitMinistryBudget() {
         {
           item_name: '',
           description: '',
-          quantity: '1',
-          unit_cost: '',
+          quantity: 1,
+          unit_cost: 0,
           category: '',
           priority: 'medium',
         },
@@ -92,8 +92,8 @@ export function SubmitMinistryBudget() {
 
   // Calculate total
   const totalAmount = items.reduce((sum, item) => {
-    const qty = parseInt(item.quantity as any) || 0;
-    const cost = parseFloat(item.unit_cost as any) || 0;
+    const qty = Number(item.quantity) || 0;
+    const cost = Number(item.unit_cost) || 0;
     return sum + (qty * cost);
   }, 0);
 
@@ -101,8 +101,8 @@ export function SubmitMinistryBudget() {
     append({
       item_name: '',
       description: '',
-      quantity: '1',
-      unit_cost: '',
+      quantity: 1,
+      unit_cost: 0,
       category: '',
       priority: 'medium',
     });
@@ -343,8 +343,8 @@ export function SubmitMinistryBudget() {
                   <p className="text-sm font-medium text-right">
                     Subtotal: GH₵
                     {(
-                      (parseInt(items[index]?.quantity as any) || 0) *
-                      (parseFloat(items[index]?.unit_cost as any) || 0)
+                      (Number(items[index]?.quantity) || 0) *
+                      (Number(items[index]?.unit_cost) || 0)
                     ).toFixed(2)}
                   </p>
                 </div>
