@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tantml:react-query';
 import {
   FileText,
   Calendar,
@@ -11,6 +12,7 @@ import {
   CheckCircle,
   XCircle,
   Trash2,
+  Receipt,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -21,11 +23,13 @@ import { Modal } from '@/components/ui/Modal';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { fetchAllMinistryReports, acknowledgeMinistryReport, unacknowledgeMinistryReport, deleteMinistryReport } from '@/services/ministryReports';
 import { fetchMinistries } from '@/services/ministries';
+import { fetchAllMinistryBudgets } from '@/services/ministryBudgets';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export function AllMinistryReports() {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const queryClient = useQueryClient();
   const [selectedMinistry, setSelectedMinistry] = useState<string>('all');
@@ -43,10 +47,20 @@ export function AllMinistryReports() {
     queryFn: fetchMinistries,
   });
 
+  // Fetch budgets to count pending ones
+  const budgetsQuery = useQuery({
+    queryKey: ['ministry-budgets-all'],
+    queryFn: fetchAllMinistryBudgets,
+  });
+
   useRealtimeQuery('ministry_reports', ['all-ministry-reports']);
 
   const reports = reportsQuery.data ?? [];
   const ministries = ministriesQuery.data ?? [];
+  const budgets = budgetsQuery.data ?? [];
+  
+  // Count pending budgets
+  const pendingBudgetsCount = budgets.filter((b) => b.status === 'pending').length;
 
   const acknowledgeMutation = useMutation({
     mutationFn: ({ id, note }: { id: string; note?: string }) =>
@@ -135,16 +149,31 @@ export function AllMinistryReports() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-ink">Ministry Reports</h1>
           <p className="text-sm text-slate-500">
             View all submitted reports from ministry leaders
           </p>
         </div>
-        <Button variant="outline" onClick={handleExport} disabled={filteredReports.length === 0}>
-          <Download className="h-4 w-4" /> Export CSV
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/ministry-budgets')}
+            className="relative"
+          >
+            <Receipt className="h-4 w-4" />
+            View Budgets
+            {pendingBudgetsCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                {pendingBudgetsCount}
+              </span>
+            )}
+          </Button>
+          <Button variant="outline" onClick={handleExport} disabled={filteredReports.length === 0}>
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
+        </div>
       </div>
 
       <Card>

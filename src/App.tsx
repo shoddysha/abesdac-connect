@@ -30,6 +30,7 @@ import { SubmitMinistryBudget } from '@/pages/SubmitMinistryBudget';
 import { MemberFollowUp } from '@/pages/MemberFollowUp';
 import { AllMinistryReports } from '@/pages/AllMinistryReports';
 import { AllMemberFollowUps } from '@/pages/AllMemberFollowUps';
+import { MinistryBudgets } from '@/pages/MinistryBudgets';
 
 export function App() {
   return (
@@ -138,6 +139,14 @@ export function App() {
               element={
                 <ProtectedRoute roles={['administrator', 'secretary']}>
                   <AllMinistryReports />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ministry-budgets"
+              element={
+                <ProtectedRoute roles={['administrator', 'secretary']}>
+                  <MinistryBudgets />
                 </ProtectedRoute>
               }
             />
