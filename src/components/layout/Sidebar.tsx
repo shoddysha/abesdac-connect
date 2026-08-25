@@ -42,6 +42,7 @@ const navItems: NavItem[] = [
   { to: '/prayer-requests', label: 'Prayer Requests', icon: HandHeart, roles: ['administrator', 'pastor', 'secretary'] },
   { to: '/leaders', label: 'Leaders', icon: UsersRound, roles: ['administrator', 'pastor', 'ministry_leader', 'secretary'] },
   { to: '/member-followup', label: 'Member Follow-up', icon: Heart, roles: ['ministry_leader'] },
+  { to: '/ministry-reports', label: 'Submit Reports', icon: FileBarChart, roles: ['ministry_leader'] },
   { to: '/all-member-followups', label: 'Member Follow-ups', icon: Heart, roles: ['administrator', 'secretary'] },
   { to: '/all-ministry-reports', label: 'Ministry Reports', icon: FileBarChart, roles: ['administrator', 'secretary'] },
   { to: '/sms', label: 'SMS', icon: MessageSquare, roles: ['administrator', 'secretary'] },
