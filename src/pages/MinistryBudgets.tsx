@@ -186,7 +186,7 @@ export function MinistryBudgets() {
                           ? 'red'
                           : budget.status === 'allocated'
                           ? 'blue'
-                          : 'yellow'
+                          : 'amber'
                       }
                     >
                       {budget.status}
@@ -315,7 +315,7 @@ export function MinistryBudgets() {
                       ? 'green'
                       : budgetDetailsQuery.data.status === 'rejected'
                       ? 'red'
-                      : 'yellow'
+                      : 'amber'
                   }
                 >
                   {budgetDetailsQuery.data.status}
@@ -408,7 +408,7 @@ export function MinistryBudgets() {
               Cancel
             </Button>
             <Button
-              variant={reviewAction === 'approve' ? 'default' : 'outline'}
+              variant={reviewAction === 'approve' ? 'primary' : 'danger'}
               onClick={handleReview}
               isLoading={reviewMutation.isPending}
             >
