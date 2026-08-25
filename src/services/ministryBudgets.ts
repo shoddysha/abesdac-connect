@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { MinistryBudget, MinistryBudgetItem, BudgetStatus, BudgetPeriodType } from '@/types/database';
+import { logAudit } from './audit';
 
 export interface MinistryBudgetWithDetails extends MinistryBudget {
   ministry_name?: string;
@@ -116,6 +117,20 @@ export async function fetchBudgetWithItems(budgetId: string): Promise<MinistryBu
  * Create a new budget with items
  */
 export async function createMinistryBudget(input: CreateBudgetInput, submittedBy: string): Promise<string> {
+  // Get user profile for audit log
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', submittedBy)
+    .single();
+
+  // Get ministry name for audit log
+  const { data: ministry } = await supabase
+    .from('ministries')
+    .select('name')
+    .eq('id', input.ministry_id)
+    .single();
+
   // Create the budget
   const { data: budget, error: budgetError } = await supabase
     .from('ministry_budgets')
@@ -153,6 +168,16 @@ export async function createMinistryBudget(input: CreateBudgetInput, submittedBy
     if (itemsError) throw itemsError;
   }
 
+  // Log audit
+  await logAudit(
+    'create',
+    'ministry_budgets',
+    `${profile?.full_name || 'User'} submitted budget "${input.title}" for ${ministry?.name || 'ministry'}`,
+    budget.id,
+    submittedBy,
+    profile?.full_name
+  );
+
   return budget.id;
 }
 
@@ -160,12 +185,31 @@ export async function createMinistryBudget(input: CreateBudgetInput, submittedBy
  * Delete a budget (and its items via CASCADE)
  */
 export async function deleteMinistryBudget(id: string): Promise<void> {
+  // Get budget details for audit log
+  const { data: budget } = await supabase
+    .from('ministry_budgets')
+    .select('title, ministries(name), submitter:profiles!ministry_budgets_submitted_by_fkey(id, full_name)')
+    .eq('id', id)
+    .single();
+
   const { error } = await supabase
     .from('ministry_budgets')
     .delete()
     .eq('id', id);
 
   if (error) throw error;
+
+  // Log audit
+  if (budget) {
+    await logAudit(
+      'delete',
+      'ministry_budgets',
+      `Budget "${budget.title}" from ${(budget as any).ministries?.name || 'ministry'} was deleted`,
+      id,
+      (budget as any).submitter?.id,
+      (budget as any).submitter?.full_name
+    );
+  }
 }
 
 /**
@@ -177,6 +221,16 @@ export async function updateBudgetStatus(
   reviewedBy: string,
   reviewNote?: string
 ): Promise<void> {
+  // Get reviewer and budget details for audit log
+  const [reviewerResponse, budgetResponse] = await Promise.all([
+    supabase.from('profiles').select('full_name').eq('id', reviewedBy).single(),
+    supabase
+      .from('ministry_budgets')
+      .select('title, ministries(name), submitter:profiles!ministry_budgets_submitted_by_fkey(full_name)')
+      .eq('id', id)
+      .single(),
+  ]);
+
   const { error } = await supabase
     .from('ministry_budgets')
     .update({
@@ -188,6 +242,19 @@ export async function updateBudgetStatus(
     .eq('id', id);
 
   if (error) throw error;
+
+  // Log audit
+  if (reviewerResponse.data && budgetResponse.data) {
+    const budget = budgetResponse.data as any;
+    await logAudit(
+      'update',
+      'ministry_budgets',
+      `${reviewerResponse.data.full_name} ${status} budget "${budget.title}" from ${budget.ministries?.name || 'ministry'}${reviewNote ? ` - Note: ${reviewNote}` : ''}`,
+      id,
+      reviewedBy,
+      reviewerResponse.data.full_name
+    );
+  }
 }
 
 /**

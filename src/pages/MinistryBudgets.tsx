@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { DollarSign, CheckCircle, XCircle, Eye, Trash2, Clock, FileText } from 'lucide-react';
+import { DollarSign, CheckCircle, XCircle, Eye, Trash2, Clock, FileText, ArrowLeft } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -21,6 +22,7 @@ import { format } from 'date-fns';
 type BudgetStatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'allocated';
 
 export function MinistryBudgets() {
+  const navigate = useNavigate();
   const { profile, hasRole } = useAuth();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<BudgetStatusFilter>('all');
@@ -127,11 +129,20 @@ export function MinistryBudgets() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Ministry Budgets</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Review and manage budget requests from ministry leaders
-          </p>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/all-ministry-reports')}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-ink">Ministry Budgets</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Review and manage budget requests from ministry leaders
+            </p>
+          </div>
         </div>
       </div>
 
