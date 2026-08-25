@@ -33,12 +33,21 @@ export function computeTotal(lineItems: BudgetLineItem[]): number {
 
 /** Fetch all budgets for a specific ministry (ministry leader view) */
 export async function fetchMinistryBudgets(ministryId: string): Promise<MinistryBudgetWithDetails[]> {
+  console.log('Fetching ministry budgets for ministry:', ministryId);
+  
   const { data, error } = await supabase
     .from('ministry_budgets')
     .select('*, ministries(name), profiles(full_name)')
     .eq('ministry_id', ministryId)
     .order('created_at', { ascending: false });
-  if (error) throw error;
+    
+  if (error) {
+    console.error('Error fetching ministry budgets:', error);
+    throw error;
+  }
+  
+  console.log('Fetched ministry budgets:', data?.length || 0, 'budgets', data);
+  
   return (data || []).map((b: any) => ({
     ...b,
     ministry_name: b.ministries?.name,
