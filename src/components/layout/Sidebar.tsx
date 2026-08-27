@@ -17,6 +17,8 @@ import {
   Briefcase,
   FileBarChart,
   Heart,
+  Bell,
+  History,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/utils/cn';
@@ -46,6 +48,8 @@ const navItems: NavItem[] = [
   { to: '/all-member-followups', label: 'Member Follow-ups', icon: Heart, roles: ['administrator', 'secretary'] },
   { to: '/all-ministry-reports', label: 'Ministry Reports', icon: FileBarChart, roles: ['administrator', 'secretary'] },
   { to: '/sms', label: 'SMS', icon: MessageSquare, roles: ['administrator', 'secretary'] },
+  { to: '/notification-settings', label: 'Notifications', icon: Bell, roles: ['administrator', 'secretary'] },
+  { to: '/notification-history', label: 'Notification History', icon: History, roles: ['administrator', 'secretary'] },
   { to: '/users', label: 'User Management', icon: UserCog, roles: ['administrator'] },
   { to: '/audit-logs', label: 'Audit Logs', icon: Shield, roles: ['administrator', 'secretary'] },
   { to: '/settings', label: 'Settings', icon: Settings },

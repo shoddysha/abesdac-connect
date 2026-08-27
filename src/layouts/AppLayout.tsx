@@ -4,10 +4,12 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
 import { NotificationBanner } from '@/components/NotificationBanner';
 import { useIdleLogout } from '@/hooks/useIdleLogout';
+import { useNotificationScheduler } from '@/hooks/useNotificationScheduler';
 
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   useIdleLogout();
+  useNotificationScheduler(); // Start notification scheduler for admin/secretary
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface">

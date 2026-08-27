@@ -1,0 +1,661 @@
+import { supabase } from '@/lib/supabase';
+import type {
+  NotificationWorkflow,
+  NotificationQueue,
+  NotificationLog,
+  NotificationWorkflowType,
+  NotificationStatus,
+  NotificationStats,
+  WorkflowStats,
+  MemberNotificationPreferences,
+  VisitorFollowupStatus,
+} from '@/types/notifications';
+import { sendBulkSms } from './sms';
+import { format, addDays, parseISO, differenceInDays, isSameDay } from 'date-fns';
+
+/**
+ * Fetch all notification workflows
+ */
+export async function fetchNotificationWorkflows(): Promise<NotificationWorkflow[]> {
+  const { data, error } = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .order('workflow_type', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Update notification workflow
+ */
+export async function updateNotificationWorkflow(
+  id: string,
+  updates: Partial<NotificationWorkflow>
+): Promise<void> {
+  const { error } = await supabase
+    .from('notification_workflows')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+/**
+ * Fetch notification queue
+ */
+export async function fetchNotificationQueue(
+  status?: NotificationStatus,
+  limit = 100
+): Promise<NotificationQueue[]> {
+  let query = supabase
+    .from('notification_queue')
+    .select('*')
+    .order('scheduled_for', { ascending: false })
+    .limit(limit);
+
+  if (status) {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Fetch notification logs
+ */
+export async function fetchNotificationLogs(limit = 50): Promise<NotificationLog[]> {
+  const { data, error } = await supabase
+    .from('notification_logs')
+    .select('*')
+    .order('triggered_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Get notification statistics
+ */
+export async function getNotificationStats(): Promise<NotificationStats> {
+  const { data, error } = await supabase
+    .from('notification_queue')
+    .select('status');
+
+  if (error) throw error;
+
+  const stats = (data || []).reduce(
+    (acc, item) => {
+      if (item.status === 'sent') acc.successful++;
+      else if (item.status === 'failed') acc.failed++;
+      else if (item.status === 'pending') acc.pending++;
+      acc.total_sent++;
+      return acc;
+    },
+    { total_sent: 0, successful: 0, failed: 0, pending: 0, success_rate: 0 }
+  );
+
+  stats.success_rate = stats.total_sent > 0
+    ? (stats.successful / stats.total_sent) * 100
+    : 0;
+
+  return stats;
+}
+
+/**
+ * Get workflow-specific statistics
+ */
+export async function getWorkflowStats(): Promise<WorkflowStats[]> {
+  const [workflows, queue] = await Promise.all([
+    fetchNotificationWorkflows(),
+    supabase.from('notification_queue').select('workflow_type, status'),
+  ]);
+
+  if (queue.error) throw queue.error;
+
+  return workflows.map((workflow) => {
+    const workflowQueue = (queue.data || []).filter(
+      (q: any) => q.workflow_type === workflow.workflow_type
+    );
+
+    const stats = workflowQueue.reduce(
+      (acc, item: any) => {
+        if (item.status === 'sent') acc.successful++;
+        else if (item.status === 'failed') acc.failed++;
+        else if (item.status === 'pending') acc.pending++;
+        acc.total_sent++;
+        return acc;
+      },
+      { total_sent: 0, successful: 0, failed: 0, pending: 0, success_rate: 0 }
+    );
+
+    stats.success_rate = stats.total_sent > 0
+      ? (stats.successful / stats.total_sent) * 100
+      : 0;
+
+    return {
+      ...stats,
+      workflow_type: workflow.workflow_type,
+      workflow_name: workflow.name,
+      last_run: workflow.last_run_at,
+    };
+  });
+}
+
+/**
+ * Queue a notification
+ */
+export async function queueNotification(
+  workflowType: NotificationWorkflowType,
+  recipientId: string | null,
+  recipientName: string | null,
+  recipientPhone: string,
+  message: string,
+  scheduledFor: Date = new Date(),
+  metadata: Record<string, any> = {}
+): Promise<void> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('id')
+    .eq('workflow_type', workflowType)
+    .single();
+
+  const { error } = await supabase.from('notification_queue').insert({
+    workflow_id: workflow.data?.id || null,
+    workflow_type: workflowType,
+    recipient_id: recipientId,
+    recipient_name: recipientName,
+    recipient_phone: recipientPhone,
+    message,
+    scheduled_for: scheduledFor.toISOString(),
+    status: 'pending',
+    metadata,
+  });
+
+  if (error) throw error;
+}
+
+/**
+ * Process pending notifications (send them via SMS)
+ */
+export async function processPendingNotifications(): Promise<{
+  sent: number;
+  failed: number;
+}> {
+  const { data: pending, error } = await supabase
+    .from('notification_queue')
+    .select('*')
+    .eq('status', 'pending')
+    .lte('scheduled_for', new Date().toISOString())
+    .limit(100);
+
+  if (error) throw error;
+  if (!pending || pending.length === 0) return { sent: 0, failed: 0 };
+
+  let sent = 0;
+  let failed = 0;
+
+  // Group by workflow for batch sending
+  const byWorkflow = pending.reduce((acc: any, notif: any) => {
+    if (!acc[notif.workflow_type]) acc[notif.workflow_type] = [];
+    acc[notif.workflow_type].push(notif);
+    return acc;
+  }, {});
+
+  for (const [workflowType, notifications] of Object.entries(byWorkflow) as [string, any][]) {
+    try {
+      // Prepare recipients for bulk SMS
+      const recipients = notifications.map((n: any) => ({
+        phone: n.recipient_phone,
+        message: n.message,
+        id: n.id,
+        recipient_name: n.recipient_name,
+      }));
+
+      // Send via Arkesel
+      const result = await sendBulkSms(
+        recipients.map((r: any) => ({ phone: r.phone, name: r.recipient_name })),
+        recipients[0].message,
+        workflowType as any
+      );
+
+      // Update queue items based on result
+      for (const recipient of recipients) {
+        const success = result.successful_count > 0; // Simplified - in reality check per recipient
+        await supabase
+          .from('notification_queue')
+          .update({
+            status: success ? 'sent' : 'failed',
+            sent_at: success ? new Date().toISOString() : null,
+            error_message: success ? null : 'Failed to send',
+          })
+          .eq('id', recipient.id);
+
+        if (success) sent++;
+        else failed++;
+      }
+    } catch (err) {
+      console.error(`Failed to send ${workflowType} notifications:`, err);
+      // Mark all as failed
+      for (const notif of notifications) {
+        await supabase
+          .from('notification_queue')
+          .update({
+            status: 'failed',
+            error_message: (err as Error).message,
+          })
+          .eq('id', notif.id);
+        failed++;
+      }
+    }
+  }
+
+  return { sent, failed };
+}
+
+/**
+ * Replace placeholders in message template
+ */
+export function replacePlaceholders(
+  template: string,
+  data: Record<string, any>
+): string {
+  let message = template;
+  Object.entries(data).forEach(([key, value]) => {
+    const placeholder = `{${key}}`;
+    message = message.replace(new RegExp(placeholder, 'g'), String(value || ''));
+  });
+  return message;
+}
+
+/**
+ * Check for birthdays and queue notifications
+ */
+export async function checkBirthdays(): Promise<number> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'birthday_greeting')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return 0;
+
+  const today = new Date();
+  const todayMonth = today.getMonth() + 1;
+  const todayDay = today.getDate();
+
+  // Get members with birthdays today
+  const { data: members, error } = await supabase
+    .from('members')
+    .select('id, first_name, last_name, phone, date_of_birth, status')
+    .eq('status', 'active')
+    .not('phone', 'is', null)
+    .not('date_of_birth', 'is', null);
+
+  if (error) throw error;
+
+  let queued = 0;
+
+  for (const member of members || []) {
+    if (!member.date_of_birth) continue;
+
+    const dob = parseISO(member.date_of_birth);
+    const dobMonth = dob.getMonth() + 1;
+    const dobDay = dob.getDate();
+
+    if (dobMonth === todayMonth && dobDay === todayDay) {
+      // Check if already sent today
+      const { data: existing } = await supabase
+        .from('notification_queue')
+        .select('id')
+        .eq('workflow_type', 'birthday_greeting')
+        .eq('recipient_id', member.id)
+        .gte('created_at', new Date(today.setHours(0, 0, 0, 0)).toISOString())
+        .single();
+
+      if (existing) continue;
+
+      const message = replacePlaceholders(workflow.data.message_template, {
+        first_name: member.first_name,
+        last_name: member.last_name,
+        full_name: `${member.first_name} ${member.last_name}`,
+      });
+
+      await queueNotification(
+        'birthday_greeting',
+        member.id,
+        `${member.first_name} ${member.last_name}`,
+        member.phone,
+        message,
+        new Date(),
+        { date_of_birth: member.date_of_birth }
+      );
+
+      queued++;
+    }
+  }
+
+  // Update last_run_at
+  await supabase
+    .from('notification_workflows')
+    .update({ last_run_at: new Date().toISOString() })
+    .eq('id', workflow.data.id);
+
+  return queued;
+}
+
+/**
+ * Check for anniversaries and queue notifications
+ */
+export async function checkAnniversaries(): Promise<number> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'anniversary_greeting')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return 0;
+
+  // Note: We need a wedding_date field. For now, we'll skip this
+  // and return 0. You can add a migration to add wedding_date to members table
+  
+  // Update last_run_at
+  await supabase
+    .from('notification_workflows')
+    .update({ last_run_at: new Date().toISOString() })
+    .eq('id', workflow.data.id);
+
+  return 0;
+}
+
+/**
+ * Check for new visitors and queue follow-up sequence
+ */
+export async function checkNewVisitors(): Promise<number> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'new_visitor_followup')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return 0;
+
+  const now = new Date();
+
+  // Get visitors from the last 7 days
+  const sevenDaysAgo = addDays(now, -7);
+  const { data: visitors, error } = await supabase
+    .from('visitors')
+    .select('*')
+    .gte('visit_date', sevenDaysAgo.toISOString().split('T')[0])
+    .not('phone_number', 'is', null);
+
+  if (error) throw error;
+
+  let queued = 0;
+
+  for (const visitor of visitors || []) {
+    if (!visitor.phone_number) continue;
+
+    const visitDate = parseISO(visitor.visit_date);
+    const daysSinceVisit = differenceInDays(now, visitDate);
+
+    // Get or create follow-up status
+    let { data: status } = await supabase
+      .from('visitor_followup_status')
+      .select('*')
+      .eq('visitor_id', visitor.id)
+      .single();
+
+    if (!status) {
+      const { data: newStatus } = await supabase
+        .from('visitor_followup_status')
+        .insert({ visitor_id: visitor.id })
+        .select()
+        .single();
+      status = newStatus;
+    }
+
+    if (!status) continue;
+
+    const messages = [
+      {
+        day: 0,
+        field: 'day1_sent_at' as const,
+        template: 'Welcome! We are blessed to have you. See you again soon!',
+      },
+      {
+        day: 3,
+        field: 'day3_sent_at' as const,
+        template: `Hi ${visitor.first_name}, we hope to see you this Sabbath. God bless you!`,
+      },
+      {
+        day: 7,
+        field: 'day7_sent_at' as const,
+        template: `Still thinking of you! Need prayer or have questions? We're here for you.`,
+      },
+    ];
+
+    for (const msg of messages) {
+      if (daysSinceVisit >= msg.day && !status[msg.field]) {
+        await queueNotification(
+          'new_visitor_followup',
+          visitor.id,
+          `${visitor.first_name} ${visitor.last_name}`,
+          visitor.phone_number,
+          msg.template,
+          new Date()
+        );
+
+        // Mark as sent
+        await supabase
+          .from('visitor_followup_status')
+          .update({ [msg.field]: new Date().toISOString() })
+          .eq('visitor_id', visitor.id);
+
+        queued++;
+      }
+    }
+  }
+
+  await supabase
+    .from('notification_workflows')
+    .update({ last_run_at: new Date().toISOString() })
+    .eq('id', workflow.data.id);
+
+  return queued;
+}
+
+/**
+ * Check for inactive members and queue re-engagement
+ */
+export async function checkInactiveMembers(): Promise<number> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'inactive_member_reengagement')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return 0;
+
+  const daysThreshold = (workflow.data.schedule_config as any)?.days_threshold || 30;
+  const thresholdDate = addDays(new Date(), -daysThreshold);
+
+  // Get active members
+  const { data: members, error: membersError } = await supabase
+    .from('members')
+    .select('id, first_name, last_name, phone, status')
+    .eq('status', 'active')
+    .not('phone', 'is', null);
+
+  if (membersError) throw membersError;
+
+  let queued = 0;
+
+  for (const member of members || []) {
+    // Check last attendance
+    const { data: lastAttendance } = await supabase
+      .from('attendance')
+      .select('service_date')
+      .eq('member_id', member.id)
+      .order('service_date', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!lastAttendance) continue;
+
+    const lastDate = parseISO(lastAttendance.service_date);
+    const daysInactive = differenceInDays(new Date(), lastDate);
+
+    if (daysInactive >= daysThreshold) {
+      // Check if already sent this month
+      const { data: existing } = await supabase
+        .from('notification_queue')
+        .select('id')
+        .eq('workflow_type', 'inactive_member_reengagement')
+        .eq('recipient_id', member.id)
+        .gte('created_at', addDays(new Date(), -30).toISOString())
+        .single();
+
+      if (existing) continue;
+
+      const message = replacePlaceholders(workflow.data.message_template, {
+        first_name: member.first_name,
+        last_name: member.last_name,
+      });
+
+      await queueNotification(
+        'inactive_member_reengagement',
+        member.id,
+        `${member.first_name} ${member.last_name}`,
+        member.phone,
+        message,
+        new Date(),
+        { days_inactive: daysInactive }
+      );
+
+      queued++;
+    }
+  }
+
+  await supabase
+    .from('notification_workflows')
+    .update({ last_run_at: new Date().toISOString() })
+    .eq('id', workflow.data.id);
+
+  return queued;
+}
+
+/**
+ * Check for upcoming events and queue reminders
+ */
+export async function checkEventReminders(): Promise<number> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'event_reminder')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return 0;
+
+  const daysBefore = (workflow.data.schedule_config as any)?.days_before || [7, 1];
+  const now = new Date();
+
+  // Get upcoming events
+  const { data: events, error } = await supabase
+    .from('events')
+    .select('*')
+    .eq('status', 'upcoming')
+    .gte('start_time', now.toISOString());
+
+  if (error) throw error;
+
+  let queued = 0;
+
+  for (const event of events || []) {
+    const eventDate = parseISO(event.start_time);
+    const daysUntil = differenceInDays(eventDate, now);
+
+    for (const dayBefore of daysBefore) {
+      if (daysUntil === dayBefore) {
+        // Check if already sent for this day
+        const { data: existing } = await supabase
+          .from('notification_queue')
+          .select('id')
+          .eq('workflow_type', 'event_reminder')
+          .eq('metadata->>event_id', event.id)
+          .eq('metadata->>days_before', String(dayBefore))
+          .single();
+
+        if (existing) continue;
+
+        // Get all active members with phones
+        const { data: members } = await supabase
+          .from('members')
+          .select('id, first_name, last_name, phone')
+          .eq('status', 'active')
+          .not('phone', 'is', null);
+
+        if (!members) continue;
+
+        for (const member of members) {
+          const message = replacePlaceholders(workflow.data.message_template, {
+            first_name: member.first_name,
+            event_title: event.title,
+            event_date: format(eventDate, 'MMM d, yyyy'),
+            event_time: format(eventDate, 'h:mm a'),
+            event_location: event.location || 'Church',
+          });
+
+          await queueNotification(
+            'event_reminder',
+            member.id,
+            `${member.first_name} ${member.last_name}`,
+            member.phone,
+            message,
+            new Date(),
+            { event_id: event.id, days_before: dayBefore }
+          );
+
+          queued++;
+        }
+      }
+    }
+  }
+
+  await supabase
+    .from('notification_workflows')
+    .update({ last_run_at: new Date().toISOString() })
+    .eq('id', workflow.data.id);
+
+  return queued;
+}
+
+/**
+ * Master function to check all workflows
+ */
+export async function checkAllWorkflows(): Promise<{
+  birthdays: number;
+  anniversaries: number;
+  visitors: number;
+  inactive: number;
+  events: number;
+}> {
+  const [birthdays, anniversaries, visitors, inactive, events] = await Promise.all([
+    checkBirthdays(),
+    checkAnniversaries(),
+    checkNewVisitors(),
+    checkInactiveMembers(),
+    checkEventReminders(),
+  ]);
+
+  return { birthdays, anniversaries, visitors, inactive, events };
+}

@@ -32,6 +32,8 @@ import { AllMinistryReports } from '@/pages/AllMinistryReports';
 import { AllMemberFollowUps } from '@/pages/AllMemberFollowUps';
 import { MinistryBudgets } from '@/pages/MinistryBudgets';
 import { MyMinistryBudgets } from '@/pages/MyMinistryBudgets';
+import { NotificationSettings } from '@/pages/NotificationSettings';
+import { NotificationHistory } from '@/pages/NotificationHistory';
 
 export function App() {
   return (
@@ -170,6 +172,22 @@ export function App() {
               element={
                 <ProtectedRoute roles={['administrator', 'secretary']}>
                   <AuditLogs />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/notification-settings"
+              element={
+                <ProtectedRoute roles={['administrator', 'secretary']}>
+                  <NotificationSettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/notification-history"
+              element={
+                <ProtectedRoute roles={['administrator', 'secretary']}>
+                  <NotificationHistory />
                 </ProtectedRoute>
               }
             />
