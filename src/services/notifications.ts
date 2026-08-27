@@ -215,27 +215,55 @@ export async function processPendingNotifications(): Promise<{
         recipient_name: n.recipient_name,
       }));
 
+      // Get unique message (assuming all notifications in same workflow have same template)
+      const message = recipients[0].message;
+
+      // Prepare recipient filters - send to specific phone numbers
+      const recipientFilters = {
+        member_ids: notifications
+          .filter((n: any) => n.recipient_id)
+          .map((n: any) => n.recipient_id),
+      };
+
+      // If no member IDs, skip (shouldn't happen but safety check)
+      if (recipientFilters.member_ids.length === 0) {
+        console.warn(`Skipping ${workflowType}: no member IDs found`);
+        continue;
+      }
+
       // Send via Arkesel
       const result = await sendBulkSms(
-        recipients.map((r: any) => ({ phone: r.phone, name: r.recipient_name })),
-        recipients[0].message,
+        message,
+        recipientFilters,
         workflowType as any
       );
 
       // Update queue items based on result
-      for (const recipient of recipients) {
-        const success = result.successful_count > 0; // Simplified - in reality check per recipient
-        await supabase
-          .from('notification_queue')
-          .update({
-            status: success ? 'sent' : 'failed',
-            sent_at: success ? new Date().toISOString() : null,
-            error_message: success ? null : 'Failed to send',
-          })
-          .eq('id', recipient.id);
-
-        if (success) sent++;
-        else failed++;
+      if (result.success) {
+        // Mark all as sent
+        for (const recipient of recipients) {
+          await supabase
+            .from('notification_queue')
+            .update({
+              status: 'sent',
+              sent_at: new Date().toISOString(),
+              sms_log_id: result.logId || null,
+            })
+            .eq('id', recipient.id);
+          sent++;
+        }
+      } else {
+        // Mark all as failed
+        for (const recipient of recipients) {
+          await supabase
+            .from('notification_queue')
+            .update({
+              status: 'failed',
+              error_message: result.message,
+            })
+            .eq('id', recipient.id);
+          failed++;
+        }
       }
     } catch (err) {
       console.error(`Failed to send ${workflowType} notifications:`, err);
