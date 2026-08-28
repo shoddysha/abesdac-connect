@@ -781,7 +781,7 @@ export function Sms() {
                 description={`Failed to load notification data: ${(queueQuery.error as Error)?.message || 'Unknown error'}`}
               />
             </Card>
-          ) : ( ) : (
+          ) : (
             <>
               {/* Stats Cards */}
               {notificationStats && (
