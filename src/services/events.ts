@@ -19,7 +19,7 @@ export async function createEvent(payload: Partial<Event>) {
     `Event created: ${data.title}`,
     data.id,
     (await supabase.auth.getUser()).data.user?.id,
-    null
+    undefined
   );
   
   return data as Event;
@@ -48,7 +48,7 @@ export async function updateEvent(id: string, payload: Partial<Event>) {
     auditMessage,
     id,
     (await supabase.auth.getUser()).data.user?.id,
-    null
+    undefined
   );
   
   // If event was just cancelled, send notification to registered attendees
@@ -88,7 +88,7 @@ export async function deleteEvent(id: string) {
       `Event deleted: ${event.title}`,
       id,
       (await supabase.auth.getUser()).data.user?.id,
-      null
+      undefined
     );
   }
 }

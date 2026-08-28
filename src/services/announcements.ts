@@ -23,7 +23,7 @@ export async function createAnnouncement(payload: Partial<Announcement>) {
     `Announcement created: ${data.title}${data.is_pinned ? ' (Broadcast)' : ''}`,
     data.id,
     (await supabase.auth.getUser()).data.user?.id,
-    null
+    undefined
   );
   
   // If announcement is pinned (broadcast), send SMS to all active members
@@ -67,7 +67,7 @@ export async function updateAnnouncement(id: string, payload: Partial<Announceme
     auditMessage,
     id,
     (await supabase.auth.getUser()).data.user?.id,
-    null
+    undefined
   );
   
   // If announcement was just pinned (broadcast enabled), send SMS to all active members
@@ -107,7 +107,7 @@ export async function deleteAnnouncement(id: string) {
       `Announcement deleted: ${announcement.title}`,
       id,
       (await supabase.auth.getUser()).data.user?.id,
-      null
+      undefined
     );
   }
 }

@@ -79,7 +79,7 @@ export async function createPrayerRequest(input: CreatePrayerRequestInput): Prom
     `New prayer request submitted${input.is_anonymous ? ' (Anonymous)' : ` by ${input.requested_by}`}`,
     data.id,
     input.created_by ?? (await supabase.auth.getUser()).data.user?.id,
-    null
+    undefined
   );
   
   return data;
@@ -124,7 +124,7 @@ export async function updatePrayerRequest(
     auditMessage,
     id,
     (await supabase.auth.getUser()).data.user?.id,
-    null
+    undefined
   );
   
   // If prayer was just answered, send notification
@@ -166,7 +166,7 @@ export async function deletePrayerRequest(id: string): Promise<void> {
       `Prayer request deleted for ${prayer.requested_by}`,
       id,
       (await supabase.auth.getUser()).data.user?.id,
-      null
+      undefined
     );
   }
 }
