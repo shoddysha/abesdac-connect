@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { logAudit } from './audit';
 
 export interface Visitor {
   id: string;
@@ -53,6 +54,16 @@ export async function createVisitor(visitor: Omit<Visitor, 'id' | 'created_at'>)
 
   if (error) throw error;
   
+  // Log audit
+  await logAudit(
+    'create',
+    'visitors',
+    `New visitor recorded: ${data.first_name} ${data.last_name}`,
+    data.id,
+    (await supabase.auth.getUser()).data.user?.id,
+    null
+  );
+  
   // Queue welcome SMS if phone number is provided
   if (data.phone_number) {
     try {
@@ -80,11 +91,40 @@ export async function updateVisitor(id: string, updates: Partial<Visitor>): Prom
     .eq('id', id);
 
   if (error) throw error;
+  
+  // Log audit
+  await logAudit(
+    'update',
+    'visitors',
+    `Visitor information updated`,
+    id,
+    (await supabase.auth.getUser()).data.user?.id,
+    null
+  );
 }
 
 export async function deleteVisitor(id: string): Promise<void> {
+  // Get visitor name for audit log
+  const { data: visitor } = await supabase
+    .from('visitors')
+    .select('first_name, last_name')
+    .eq('id', id)
+    .single();
+  
   const { error } = await supabase.from('visitors').delete().eq('id', id);
   if (error) throw error;
+  
+  // Log audit
+  if (visitor) {
+    await logAudit(
+      'delete',
+      'visitors',
+      `Visitor deleted: ${visitor.first_name} ${visitor.last_name}`,
+      id,
+      (await supabase.auth.getUser()).data.user?.id,
+      null
+    );
+  }
 }
 
 export async function markAsFollowedUp(id: string): Promise<void> {

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { logAudit } from './audit';
 
 export type PrayerStatus = 'open' | 'ongoing' | 'answered';
 
@@ -70,6 +71,17 @@ export async function createPrayerRequest(input: CreatePrayerRequestInput): Prom
     .single();
 
   if (error) throw error;
+  
+  // Log audit
+  await logAudit(
+    'create',
+    'prayer_requests',
+    `New prayer request submitted${input.is_anonymous ? ' (Anonymous)' : ` by ${input.requested_by}`}`,
+    data.id,
+    input.created_by ?? (await supabase.auth.getUser()).data.user?.id,
+    null
+  );
+  
   return data;
 }
 
@@ -98,6 +110,23 @@ export async function updatePrayerRequest(
 
   if (error) throw error;
   
+  // Log audit
+  let auditMessage = 'Prayer request updated';
+  if (originalRequest && originalRequest.status !== 'answered' && updates.status === 'answered') {
+    auditMessage = `Prayer request marked as ANSWERED for ${originalRequest.requested_by}`;
+  } else if (updates.status) {
+    auditMessage = `Prayer request status changed to ${updates.status}`;
+  }
+  
+  await logAudit(
+    'update',
+    'prayer_requests',
+    auditMessage,
+    id,
+    (await supabase.auth.getUser()).data.user?.id,
+    null
+  );
+  
   // If prayer was just answered, send notification
   if (originalRequest && originalRequest.status !== 'answered' && updates.status === 'answered') {
     try {
@@ -119,8 +148,27 @@ export async function updatePrayerRequest(
 }
 
 export async function deletePrayerRequest(id: string): Promise<void> {
+  // Get prayer request for audit log
+  const { data: prayer } = await supabase
+    .from('prayer_requests')
+    .select('requested_by')
+    .eq('id', id)
+    .single();
+  
   const { error } = await supabase.from('prayer_requests').delete().eq('id', id);
   if (error) throw error;
+  
+  // Log audit
+  if (prayer) {
+    await logAudit(
+      'delete',
+      'prayer_requests',
+      `Prayer request deleted for ${prayer.requested_by}`,
+      id,
+      (await supabase.auth.getUser()).data.user?.id,
+      null
+    );
+  }
 }
 
 export async function getOpenPrayerRequestsCount(): Promise<number> {

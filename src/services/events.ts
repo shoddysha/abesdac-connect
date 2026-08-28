@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { Event } from '@/types/database';
+import { logAudit } from './audit';
 
 export async function fetchEvents() {
   const { data, error } = await supabase.from('events').select('*').order('start_time', { ascending: true });
@@ -10,6 +11,17 @@ export async function fetchEvents() {
 export async function createEvent(payload: Partial<Event>) {
   const { data, error } = await supabase.from('events').insert(payload).select().single();
   if (error) throw error;
+  
+  // Log audit
+  await logAudit(
+    'create',
+    'events',
+    `Event created: ${data.title}`,
+    data.id,
+    (await supabase.auth.getUser()).data.user?.id,
+    null
+  );
+  
   return data as Event;
 }
 
@@ -23,6 +35,21 @@ export async function updateEvent(id: string, payload: Partial<Event>) {
   
   const { data, error } = await supabase.from('events').update(payload).eq('id', id).select().single();
   if (error) throw error;
+  
+  // Log audit
+  let auditMessage = `Event updated: ${data.title}`;
+  if (originalEvent && originalEvent.status !== 'cancelled' && payload.status === 'cancelled') {
+    auditMessage = `Event cancelled: ${data.title}`;
+  }
+  
+  await logAudit(
+    'update',
+    'events',
+    auditMessage,
+    id,
+    (await supabase.auth.getUser()).data.user?.id,
+    null
+  );
   
   // If event was just cancelled, send notification to registered attendees
   if (originalEvent && originalEvent.status !== 'cancelled' && payload.status === 'cancelled') {
@@ -43,6 +70,25 @@ export async function updateEvent(id: string, payload: Partial<Event>) {
 }
 
 export async function deleteEvent(id: string) {
+  // Get event title for audit log
+  const { data: event } = await supabase
+    .from('events')
+    .select('title')
+    .eq('id', id)
+    .single();
+  
   const { error } = await supabase.from('events').delete().eq('id', id);
   if (error) throw error;
+  
+  // Log audit
+  if (event) {
+    await logAudit(
+      'delete',
+      'events',
+      `Event deleted: ${event.title}`,
+      id,
+      (await supabase.auth.getUser()).data.user?.id,
+      null
+    );
+  }
 }
