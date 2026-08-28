@@ -7,7 +7,26 @@ export type NotificationWorkflowType =
   | 'ministry_leader_reminder'
   | 'first_attendance_celebration'
   | 'prayer_answered_followup'
-  | 'announcement_expiry_admin';
+  | 'announcement_expiry_admin'
+  | 'visitor_welcome'
+  | 'new_member_welcome_day1'
+  | 'new_member_welcome_day3'
+  | 'new_member_welcome_week2'
+  | 'baptism_anniversary'
+  | 'joining_anniversary'
+  | 'inactive_60days'
+  | 'event_day_reminder'
+  | 'event_thank_you'
+  | 'event_cancelled'
+  | 'report_due_7days'
+  | 'report_due_3days'
+  | 'report_due_today'
+  | 'budget_approved'
+  | 'followup_due_reminder'
+  | 'followup_completed'
+  | 'hospital_visit_alert'
+  | 'prayer_answered_update'
+  | 'announcement_published';
 
 export type NotificationStatus = 'pending' | 'sent' | 'failed' | 'cancelled';
 

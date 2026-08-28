@@ -31,8 +31,7 @@ export async function updateEvent(id: string, payload: Partial<Event>) {
       await queueEventCancellationAlert(
         id,
         data.title,
-        data.start_time,
-        data.location || 'TBA'
+        data.start_time
       );
     } catch (err) {
       console.error('Failed to queue event cancellation alert:', err);
