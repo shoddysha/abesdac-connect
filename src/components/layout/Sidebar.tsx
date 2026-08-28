@@ -19,6 +19,7 @@ import {
   Heart,
   Bell,
   History,
+  Video,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/utils/cn';
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { to: '/submit-ministry-report', label: 'Submit Reports', icon: FileBarChart, roles: ['ministry_leader'] },
   { to: '/all-member-followups', label: 'Member Follow-ups', icon: Heart, roles: ['administrator', 'secretary'] },
   { to: '/all-ministry-reports', label: 'Ministry Reports', icon: FileBarChart, roles: ['administrator', 'secretary'] },
+  { to: '/resources', label: 'Resources', icon: Video, roles: ['administrator', 'secretary', 'ministry_leader'] },
   { to: '/sms', label: 'SMS', icon: MessageSquare, roles: ['administrator', 'secretary'] },
   { to: '/notification-settings', label: 'Notifications', icon: Bell, roles: ['administrator', 'secretary'] },
   { to: '/notification-history', label: 'Notification History', icon: History, roles: ['administrator', 'secretary'] },

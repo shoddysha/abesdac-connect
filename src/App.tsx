@@ -34,6 +34,7 @@ import { MinistryBudgets } from '@/pages/MinistryBudgets';
 import { MyMinistryBudgets } from '@/pages/MyMinistryBudgets';
 import { NotificationSettings } from '@/pages/NotificationSettings';
 import { NotificationHistory } from '@/pages/NotificationHistory';
+import { Resources } from '@/pages/Resources';
 
 export function App() {
   return (
@@ -188,6 +189,14 @@ export function App() {
               element={
                 <ProtectedRoute roles={['administrator', 'secretary']}>
                   <NotificationHistory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/resources"
+              element={
+                <ProtectedRoute roles={['administrator', 'secretary', 'ministry_leader']}>
+                  <Resources />
                 </ProtectedRoute>
               }
             />
