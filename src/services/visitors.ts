@@ -52,6 +52,24 @@ export async function createVisitor(visitor: Omit<Visitor, 'id' | 'created_at'>)
     .single();
 
   if (error) throw error;
+  
+  // Queue welcome SMS if phone number is provided
+  if (data.phone_number) {
+    try {
+      const { queueVisitorWelcomeSms } = await import('./notifications');
+      await queueVisitorWelcomeSms(
+        data.id,
+        data.first_name,
+        data.last_name,
+        data.phone_number,
+        data.visit_date
+      );
+    } catch (err) {
+      console.error('Failed to queue visitor welcome SMS:', err);
+      // Don't throw - visitor was created successfully
+    }
+  }
+  
   return data;
 }
 

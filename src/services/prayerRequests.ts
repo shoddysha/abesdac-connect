@@ -77,6 +77,13 @@ export async function updatePrayerRequest(
   id: string,
   updates: UpdatePrayerRequestInput
 ): Promise<void> {
+  // Get original prayer request to check status change
+  const { data: originalRequest } = await supabase
+    .from('prayer_requests')
+    .select('status, request_text, requested_by, member_id, members(first_name, last_name, phone)')
+    .eq('id', id)
+    .single();
+  
   const payload: any = { ...updates };
 
   // Auto-set answered_at when status changes to 'answered'
@@ -90,6 +97,25 @@ export async function updatePrayerRequest(
     .eq('id', id);
 
   if (error) throw error;
+  
+  // If prayer was just answered, send notification
+  if (originalRequest && originalRequest.status !== 'answered' && updates.status === 'answered') {
+    try {
+      const member = (originalRequest as any).members;
+      if (member?.phone && originalRequest.member_id) {
+        const { queuePrayerAnsweredNotification } = await import('./notifications');
+        await queuePrayerAnsweredNotification(
+          id,
+          originalRequest.member_id,
+          `${member.first_name} ${member.last_name}`,
+          member.phone
+        );
+      }
+    } catch (err) {
+      console.error('Failed to queue prayer answered notification:', err);
+      // Don't throw - prayer update was successful
+    }
+  }
 }
 
 export async function deletePrayerRequest(id: string): Promise<void> {

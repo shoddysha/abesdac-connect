@@ -40,6 +40,24 @@ export async function fetchMember(id: string) {
 export async function createMember(payload: Partial<Member>) {
   const { data, error } = await supabase.from('members').insert(payload).select().single();
   if (error) throw error;
+  
+  // Queue new member welcome series if phone number is provided and status is active
+  if (data.phone && data.status === 'active') {
+    try {
+      const { queueNewMemberWelcomeSeries } = await import('./notifications');
+      await queueNewMemberWelcomeSeries(
+        data.id,
+        data.first_name,
+        data.last_name,
+        data.phone,
+        data.date_joined
+      );
+    } catch (err) {
+      console.error('Failed to queue new member welcome series:', err);
+      // Don't throw - member was created successfully
+    }
+  }
+  
   return data as Member;
 }
 

@@ -676,14 +676,487 @@ export async function checkAllWorkflows(): Promise<{
   visitors: number;
   inactive: number;
   events: number;
+  baptismAnniversaries: number;
+  joiningAnniversaries: number;
+  followUpReminders: number;
 }> {
-  const [birthdays, anniversaries, visitors, inactive, events] = await Promise.all([
+  const [
+    birthdays,
+    anniversaries,
+    visitors,
+    inactive,
+    events,
+    baptismAnniversaries,
+    joiningAnniversaries,
+    followUpReminders,
+  ] = await Promise.all([
     checkBirthdays(),
     checkAnniversaries(),
     checkNewVisitors(),
     checkInactiveMembers(),
     checkEventReminders(),
+    checkBaptismAnniversaries(),
+    checkJoiningAnniversaries(),
+    checkFollowUpReminders(),
   ]);
 
-  return { birthdays, anniversaries, visitors, inactive, events };
+  return {
+    birthdays,
+    anniversaries,
+    visitors,
+    inactive,
+    events,
+    baptismAnniversaries,
+    joiningAnniversaries,
+    followUpReminders,
+  };
+}
+
+/**
+ * Queue visitor welcome SMS (triggered when visitor is created)
+ */
+export async function queueVisitorWelcomeSms(
+  visitorId: string,
+  firstName: string,
+  lastName: string,
+  phone: string,
+  visitDate: string
+): Promise<void> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'visitor_welcome')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return;
+
+  const message = replacePlaceholders(workflow.data.message_template, {
+    first_name: firstName,
+    last_name: lastName,
+    full_name: `${firstName} ${lastName}`,
+    visit_date: format(parseISO(visitDate), 'MMM d, yyyy'),
+  });
+
+  await queueNotification(
+    'visitor_welcome',
+    visitorId,
+    `${firstName} ${lastName}`,
+    phone,
+    message,
+    new Date(),
+    { visit_date: visitDate }
+  );
+}
+
+/**
+ * Queue new member welcome series (Day 1, Day 3, Week 2)
+ */
+export async function queueNewMemberWelcomeSeries(
+  memberId: string,
+  firstName: string,
+  lastName: string,
+  phone: string,
+  dateJoined: string
+): Promise<void> {
+  const workflows = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .in('workflow_type', ['new_member_welcome_day1', 'new_member_welcome_day3', 'new_member_welcome_week2'])
+    .eq('is_active', true);
+
+  if (workflows.error || !workflows.data) return;
+
+  const joinDate = parseISO(dateJoined);
+
+  for (const workflow of workflows.data) {
+    const scheduleConfig = workflow.schedule_config as any;
+    let scheduledFor = new Date();
+
+    if (scheduleConfig.delay_days) {
+      scheduledFor = addDays(joinDate, scheduleConfig.delay_days);
+    }
+
+    const message = replacePlaceholders(workflow.message_template, {
+      first_name: firstName,
+      last_name: lastName,
+      full_name: `${firstName} ${lastName}`,
+    });
+
+    await queueNotification(
+      workflow.workflow_type as any,
+      memberId,
+      `${firstName} ${lastName}`,
+      phone,
+      message,
+      scheduledFor,
+      { date_joined: dateJoined }
+    );
+  }
+}
+
+/**
+ * Check baptism anniversaries and queue notifications
+ */
+export async function checkBaptismAnniversaries(): Promise<number> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'baptism_anniversary')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return 0;
+
+  const today = new Date();
+  const todayMonth = today.getMonth() + 1;
+  const todayDay = today.getDate();
+
+  const { data: members, error } = await supabase
+    .from('members')
+    .select('id, first_name, last_name, phone, baptism_date, status')
+    .eq('status', 'active')
+    .not('phone', 'is', null)
+    .not('baptism_date', 'is', null);
+
+  if (error) throw error;
+
+  let queued = 0;
+
+  for (const member of members || []) {
+    if (!member.baptism_date) continue;
+
+    const baptismDate = parseISO(member.baptism_date);
+    const baptismMonth = baptismDate.getMonth() + 1;
+    const baptismDay = baptismDate.getDate();
+
+    if (baptismMonth === todayMonth && baptismDay === todayDay) {
+      // Check if already sent today
+      const { data: existing } = await supabase
+        .from('notification_queue')
+        .select('id')
+        .eq('workflow_type', 'baptism_anniversary')
+        .eq('recipient_id', member.id)
+        .gte('created_at', new Date(today.setHours(0, 0, 0, 0)).toISOString())
+        .single();
+
+      if (existing) continue;
+
+      const message = replacePlaceholders(workflow.data.message_template, {
+        first_name: member.first_name,
+        last_name: member.last_name,
+      });
+
+      await queueNotification(
+        'baptism_anniversary',
+        member.id,
+        `${member.first_name} ${member.last_name}`,
+        member.phone,
+        message
+      );
+
+      queued++;
+    }
+  }
+
+  await supabase
+    .from('notification_workflows')
+    .update({ last_run_at: new Date().toISOString() })
+    .eq('id', workflow.data.id);
+
+  return queued;
+}
+
+/**
+ * Check joining anniversaries and queue notifications
+ */
+export async function checkJoiningAnniversaries(): Promise<number> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'joining_anniversary')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return 0;
+
+  const today = new Date();
+  const todayMonth = today.getMonth() + 1;
+  const todayDay = today.getDate();
+
+  const { data: members, error } = await supabase
+    .from('members')
+    .select('id, first_name, last_name, phone, date_joined, status')
+    .eq('status', 'active')
+    .not('phone', 'is', null);
+
+  if (error) throw error;
+
+  let queued = 0;
+
+  for (const member of members || []) {
+    const joinedDate = parseISO(member.date_joined);
+    const joinedMonth = joinedDate.getMonth() + 1;
+    const joinedDay = joinedDate.getDate();
+
+    if (joinedMonth === todayMonth && joinedDay === todayDay) {
+      const yearsJoined = today.getFullYear() - joinedDate.getFullYear();
+      if (yearsJoined === 0) continue; // Skip if joined this year
+
+      // Check if already sent today
+      const { data: existing } = await supabase
+        .from('notification_queue')
+        .select('id')
+        .eq('workflow_type', 'joining_anniversary')
+        .eq('recipient_id', member.id)
+        .gte('created_at', new Date(today.setHours(0, 0, 0, 0)).toISOString())
+        .single();
+
+      if (existing) continue;
+
+      const message = replacePlaceholders(workflow.data.message_template, {
+        first_name: member.first_name,
+        last_name: member.last_name,
+        years: yearsJoined.toString(),
+      });
+
+      await queueNotification(
+        'joining_anniversary',
+        member.id,
+        `${member.first_name} ${member.last_name}`,
+        member.phone,
+        message
+      );
+
+      queued++;
+    }
+  }
+
+  await supabase
+    .from('notification_workflows')
+    .update({ last_run_at: new Date().toISOString() })
+    .eq('id', workflow.data.id);
+
+  return queued;
+}
+
+/**
+ * Queue budget approval notification
+ */
+export async function queueBudgetApprovalNotification(
+  budgetId: string,
+  leaderId: string,
+  leaderName: string,
+  leaderPhone: string,
+  budgetTitle: string,
+  status: 'approved' | 'rejected',
+  reviewNote: string
+): Promise<void> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'budget_approved')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return;
+
+  const message = replacePlaceholders(workflow.data.message_template, {
+    budget_title: budgetTitle,
+    status: status === 'approved' ? 'APPROVED' : 'REJECTED',
+    review_note: reviewNote || 'No additional notes.',
+  });
+
+  await queueNotification(
+    'budget_approved',
+    leaderId,
+    leaderName,
+    leaderPhone,
+    message,
+    new Date(),
+    { budget_id: budgetId, status, review_note: reviewNote }
+  );
+}
+
+/**
+ * Check follow-up due reminders (day before)
+ */
+export async function checkFollowUpReminders(): Promise<number> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'followup_due_reminder')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return 0;
+
+  const tomorrow = addDays(new Date(), 1);
+  const tomorrowDate = format(tomorrow, 'yyyy-MM-dd');
+
+  // Get follow-ups due tomorrow
+  const { data: followUps, error } = await supabase
+    .from('member_followups')
+    .select(`
+      *,
+      members:member_id(first_name, last_name),
+      profiles:created_by(full_name, phone)
+    `)
+    .eq('follow_up_date', tomorrowDate)
+    .is('completed_at', null);
+
+  if (error) throw error;
+
+  let queued = 0;
+
+  for (const followUp of followUps || []) {
+    if (!followUp.profiles?.phone) continue;
+
+    const message = replacePlaceholders(workflow.data.message_template, {
+      member_name: followUp.members
+        ? `${followUp.members.first_name} ${followUp.members.last_name}`
+        : 'Unknown',
+      followup_type: followUp.follow_up_type.replace(/_/g, ' '),
+    });
+
+    await queueNotification(
+      'followup_due_reminder',
+      followUp.created_by,
+      followUp.profiles.full_name,
+      followUp.profiles.phone,
+      message,
+      new Date(),
+      { followup_id: followUp.id, member_id: followUp.member_id }
+    );
+
+    queued++;
+  }
+
+  await supabase
+    .from('notification_workflows')
+    .update({ last_run_at: new Date().toISOString() })
+    .eq('id', workflow.data.id);
+
+  return queued;
+}
+
+/**
+ * Queue event cancellation alert
+ */
+export async function queueEventCancellationAlert(
+  eventId: string,
+  eventTitle: string,
+  eventDate: string
+): Promise<void> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'event_cancelled')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return;
+
+  // Get all active members with phones
+  const { data: members } = await supabase
+    .from('members')
+    .select('id, first_name, last_name, phone')
+    .eq('status', 'active')
+    .not('phone', 'is', null);
+
+  if (!members) return;
+
+  for (const member of members) {
+    const message = replacePlaceholders(workflow.data.message_template, {
+      event_title: eventTitle,
+      event_date: format(parseISO(eventDate), 'MMM d, yyyy'),
+    });
+
+    await queueNotification(
+      'event_cancelled',
+      member.id,
+      `${member.first_name} ${member.last_name}`,
+      member.phone,
+      message,
+      new Date(),
+      { event_id: eventId }
+    );
+  }
+}
+
+/**
+ * Queue prayer request answered notification
+ */
+export async function queuePrayerAnsweredNotification(
+  prayerRequestId: string,
+  requesterId: string,
+  requesterName: string,
+  requesterPhone: string
+): Promise<void> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'prayer_answered_update')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return;
+
+  const message = replacePlaceholders(workflow.data.message_template, {
+    requester_name: requesterName,
+  });
+
+  await queueNotification(
+    'prayer_answered_update',
+    requesterId,
+    requesterName,
+    requesterPhone,
+    message,
+    new Date(),
+    { prayer_request_id: prayerRequestId }
+  );
+}
+
+/**
+ * Queue announcement broadcast
+ */
+export async function queueAnnouncementBroadcast(
+  announcementId: string,
+  announcementTitle: string,
+  announcementBody: string
+): Promise<void> {
+  const workflow = await supabase
+    .from('notification_workflows')
+    .select('*')
+    .eq('workflow_type', 'announcement_published')
+    .eq('is_active', true)
+    .single();
+
+  if (workflow.error || !workflow.data) return;
+
+  // Get all active members with phones
+  const { data: members } = await supabase
+    .from('members')
+    .select('id, first_name, last_name, phone')
+    .eq('status', 'active')
+    .not('phone', 'is', null);
+
+  if (!members) return;
+
+  for (const member of members) {
+    const message = replacePlaceholders(workflow.data.message_template, {
+      announcement_title: announcementTitle,
+      announcement_body: announcementBody.substring(0, 100), // Limit length
+    });
+
+    await queueNotification(
+      'announcement_published',
+      member.id,
+      `${member.first_name} ${member.last_name}`,
+      member.phone,
+      message,
+      new Date(),
+      { announcement_id: announcementId }
+    );
+  }
 }

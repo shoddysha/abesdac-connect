@@ -221,12 +221,17 @@ export async function updateBudgetStatus(
   reviewedBy: string,
   reviewNote?: string
 ): Promise<void> {
-  // Get reviewer and budget details for audit log
-  const [reviewerResponse, budgetResponse] = await Promise.all([
+  // Get reviewer, budget details, and ministry leader info for notifications
+  const [reviewerResponse, budgetResponse, ministryResponse] = await Promise.all([
     supabase.from('profiles').select('full_name').eq('id', reviewedBy).single(),
     supabase
       .from('ministry_budgets')
-      .select('title, ministries(name), submitter:profiles!ministry_budgets_submitted_by_fkey(full_name)')
+      .select('title, ministry_id, total_amount, ministries(name), submitter:profiles!ministry_budgets_submitted_by_fkey(full_name)')
+      .eq('id', id)
+      .single(),
+    supabase
+      .from('ministry_budgets')
+      .select('ministry_id, ministries!inner(id, leaders:ministry_leaders!inner(member_id, members!inner(first_name, last_name, phone)))')
       .eq('id', id)
       .single(),
   ]);
@@ -254,6 +259,36 @@ export async function updateBudgetStatus(
       reviewedBy,
       reviewerResponse.data.full_name
     );
+  }
+
+  // Queue budget approval/rejection notification to ministry leaders
+  if (budgetResponse.data && ministryResponse.data && (status === 'approved' || status === 'rejected')) {
+    try {
+      const budget = budgetResponse.data as any;
+      const ministry = ministryResponse.data as any;
+      const leaders = ministry.ministries?.leaders || [];
+
+      const { queueBudgetApprovalNotification } = await import('./notifications');
+      
+      // Send to all ministry leaders with phone numbers
+      for (const leader of leaders) {
+        const member = leader.members;
+        if (member?.phone) {
+          await queueBudgetApprovalNotification(
+            id,
+            member.id,
+            `${member.first_name} ${member.last_name}`,
+            member.phone,
+            budget.title,
+            status,
+            reviewNote || ''
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Failed to queue budget approval notification:', err);
+      // Don't throw - status update was successful
+    }
   }
 }
 
