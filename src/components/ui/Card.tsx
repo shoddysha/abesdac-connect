@@ -20,10 +20,21 @@ export function Card({
   );
 }
 
-export function CardHeader({ title, action }: { title: string; action?: ReactNode }) {
+export function CardHeader({ 
+  title, 
+  action, 
+  icon: Icon 
+}: { 
+  title: string; 
+  action?: ReactNode; 
+  icon?: React.ComponentType<{ className?: string }>;
+}) {
   return (
     <div className="mb-4 flex items-center justify-between">
-      <h3 className="text-base font-semibold text-ink">{title}</h3>
+      <div className="flex items-center gap-2">
+        {Icon && <Icon className="h-5 w-5 text-primary" />}
+        <h3 className="text-base font-semibold text-ink">{title}</h3>
+      </div>
       {action}
     </div>
   );
