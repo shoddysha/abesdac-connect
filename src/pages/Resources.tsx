@@ -71,7 +71,7 @@ type DocumentFormValues = z.infer<typeof documentSchema>;
 type Tab = 'sermons' | 'documents';
 
 export function Resources() {
-  const { hasRole, user } = useAuth();
+  const { hasRole } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('sermons');
   const [isSermonModalOpen, setIsSermonModalOpen] = useState(false);
