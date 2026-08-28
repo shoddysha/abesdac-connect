@@ -10,7 +10,8 @@ import type {
   MemberNotificationPreferences,
   VisitorFollowupStatus,
 } from '@/types/notifications';
-import { sendBulkSms } from './sms';
+import type { SmsType } from '@/types/database';
+import { sendBulkSms, normalizePhoneNumber, sendToArkesel, createSmsLog, updateSmsLog } from './sms';
 import { format, addDays, parseISO, differenceInDays, isSameDay } from 'date-fns';
 
 /**
@@ -198,86 +199,103 @@ export async function processPendingNotifications(): Promise<{
   let sent = 0;
   let failed = 0;
 
-  // Group by workflow for batch sending
-  const byWorkflow = pending.reduce((acc: any, notif: any) => {
-    if (!acc[notif.workflow_type]) acc[notif.workflow_type] = [];
-    acc[notif.workflow_type].push(notif);
-    return acc;
-  }, {});
-
-  for (const [workflowType, notifications] of Object.entries(byWorkflow) as [string, any][]) {
+  // Process each notification individually to avoid enum conflicts and support visitors
+  for (const notif of pending) {
     try {
-      // Prepare recipients for bulk SMS
-      const recipients = notifications.map((n: any) => ({
-        phone: n.recipient_phone,
-        message: n.message,
-        id: n.id,
-        recipient_name: n.recipient_name,
-      }));
-
-      // Get unique message (assuming all notifications in same workflow have same template)
-      const message = recipients[0].message;
-
-      // Prepare recipient filters - send to specific phone numbers
-      const recipientFilters = {
-        member_ids: notifications
-          .filter((n: any) => n.recipient_id)
-          .map((n: any) => n.recipient_id),
-      };
-
-      // If no member IDs, skip (shouldn't happen but safety check)
-      if (recipientFilters.member_ids.length === 0) {
-        console.warn(`Skipping ${workflowType}: no member IDs found`);
-        continue;
-      }
-
-      // Send via Arkesel
-      const result = await sendBulkSms(
-        message,
-        recipientFilters,
-        workflowType as any
-      );
-
-      // Update queue items based on result
-      if (result.success) {
-        // Mark all as sent
-        for (const recipient of recipients) {
-          await supabase
-            .from('notification_queue')
-            .update({
-              status: 'sent',
-              sent_at: new Date().toISOString(),
-              sms_log_id: result.logId || null,
-            })
-            .eq('id', recipient.id);
-          sent++;
-        }
-      } else {
-        // Mark all as failed
-        for (const recipient of recipients) {
-          await supabase
-            .from('notification_queue')
-            .update({
-              status: 'failed',
-              error_message: result.message,
-            })
-            .eq('id', recipient.id);
-          failed++;
-        }
-      }
-    } catch (err) {
-      console.error(`Failed to send ${workflowType} notifications:`, err);
-      // Mark all as failed
-      for (const notif of notifications) {
+      // Get phone numbers for this notification
+      const phoneNumbers = notif.recipient_phone ? [normalizePhoneNumber(notif.recipient_phone)] : [];
+      
+      if (phoneNumbers.length === 0 || !phoneNumbers[0]) {
         await supabase
           .from('notification_queue')
           .update({
             status: 'failed',
-            error_message: (err as Error).message,
+            error_message: 'No valid phone number',
           })
           .eq('id', notif.id);
         failed++;
+        continue;
       }
+
+      // Map workflow type to valid sms_type enum
+      const smsTypeMap: Record<string, SmsType> = {
+        'visitor_welcome': 'manual',
+        'new_member_welcome_day1': 'manual',
+        'new_member_welcome_day3': 'manual',
+        'new_member_welcome_week2': 'manual',
+        'birthday_greeting': 'manual',
+        'anniversary_greeting': 'manual',
+        'baptism_anniversary': 'manual',
+        'joining_anniversary': 'manual',
+        'new_visitor_followup': 'manual',
+        'inactive_member_reengagement': 'manual',
+        'event_reminder': 'event_reminder',
+        'ministry_report_reminder': 'manual',
+        'budget_approved': 'manual',
+        'budget_rejected': 'manual',
+        'followup_due_reminder': 'manual',
+        'event_cancelled': 'event_notification',
+        'prayer_answered_update': 'manual',
+        'announcement_published': 'announcement',
+      };
+
+      const smsType = smsTypeMap[notif.workflow_type] || 'manual';
+
+      // Create SMS log directly (without using sendBulkSms to avoid recipient filtering)
+      const smsLog = await createSmsLog(smsType, notif.message, 1);
+
+      try {
+        // Send via Arkesel
+        const arkeselResponse = await sendToArkesel(phoneNumbers as string[], notif.message);
+
+        // Update log with success
+        await updateSmsLog(smsLog.id, 'sent', 1, 0, arkeselResponse);
+
+        // Update notification queue
+        await supabase
+          .from('notification_queue')
+          .update({
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+            sms_log_id: smsLog.id,
+          })
+          .eq('id', notif.id);
+
+        sent++;
+      } catch (apiError) {
+        // Update log with failure
+        await updateSmsLog(
+          smsLog.id,
+          'failed',
+          0,
+          1,
+          undefined,
+          (apiError as Error).message
+        );
+
+        // Update notification queue
+        await supabase
+          .from('notification_queue')
+          .update({
+            status: 'failed',
+            error_message: (apiError as Error).message,
+          })
+          .eq('id', notif.id);
+
+        failed++;
+      }
+    } catch (err) {
+      console.error(`Failed to send notification ${notif.id}:`, err);
+      
+      // Mark as failed
+      await supabase
+        .from('notification_queue')
+        .update({
+          status: 'failed',
+          error_message: (err as Error).message,
+        })
+        .eq('id', notif.id);
+      failed++;
     }
   }
 

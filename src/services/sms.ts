@@ -13,7 +13,7 @@ import type {
  * Normalize phone number to Ghana format (233XXXXXXXXX)
  * Handles formats like: 0534268869, +233534268869, 233534268869
  */
-function normalizePhoneNumber(phone: string): string | null {
+export function normalizePhoneNumber(phone: string): string | null {
   if (!phone) return null;
 
   // Remove all spaces, dashes, and parentheses
@@ -46,7 +46,7 @@ function normalizePhoneNumber(phone: string): string | null {
  * Send SMS via Supabase Edge Function (which calls Arkesel API)
  * This keeps the API key secure and hidden from the browser
  */
-async function sendToArkesel(recipients: string[], message: string): Promise<ArkeselSmsResponse> {
+export async function sendToArkesel(recipients: string[], message: string): Promise<ArkeselSmsResponse> {
   // Get current user's session
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
@@ -110,7 +110,7 @@ export async function fetchRecipientsForFilters(filters: RecipientFilters): Prom
 /**
  * Create SMS log entry
  */
-async function createSmsLog(
+export async function createSmsLog(
   type: SmsType,
   message: string,
   recipientCount: number,
@@ -141,7 +141,7 @@ async function createSmsLog(
 /**
  * Update SMS log with results
  */
-async function updateSmsLog(
+export async function updateSmsLog(
   logId: string,
   status: 'sent' | 'failed',
   successCount: number,

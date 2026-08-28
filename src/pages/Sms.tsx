@@ -21,6 +21,7 @@ import {
   Play,
   XCircle,
   TrendingUp,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -165,6 +166,30 @@ export function Sms() {
       toast.error(err.message);
     },
   });
+
+  const resetHistoryMutation = useMutation({
+    mutationFn: async () => {
+      const { supabase } = await import('@/lib/supabase');
+      // Delete all notification queue records
+      const { error } = await supabase.from('notification_queue').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Notification history cleared successfully');
+      queryClient.invalidateQueries({ queryKey: ['notification-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['notification-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['workflow-stats'] });
+    },
+    onError: (err: Error) => {
+      toast.error(`Failed to clear history: ${err.message}`);
+    },
+  });
+
+  const handleResetHistory = () => {
+    if (window.confirm('Are you sure you want to clear all notification history? This action cannot be undone.')) {
+      resetHistoryMutation.mutate();
+    }
+  };
 
   const {
     register,
@@ -771,6 +796,27 @@ export function Sms() {
       {/* Notification History Tab Content */}
       {activeTab === 'history' && canManageNotifications && (
         <>
+          {/* Header with Reset Button */}
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-ink">Notification History</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  View and manage automated notification logs
+                </p>
+              </div>
+              <Button
+                onClick={handleResetHistory}
+                variant="outline"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                disabled={resetHistoryMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {resetHistoryMutation.isPending ? 'Clearing...' : 'Clear History'}
+              </Button>
+            </div>
+          </Card>
+
           {queueQuery.isLoading || statsQuery.isLoading ? (
             <Spinner />
           ) : queueQuery.isError ? (
