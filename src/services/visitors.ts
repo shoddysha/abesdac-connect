@@ -64,10 +64,11 @@ export async function createVisitor(visitor: Omit<Visitor, 'id' | 'created_at'>)
     undefined
   );
   
-  // Queue welcome SMS if phone number is provided
+  // Send welcome SMS immediately if phone number is provided
   if (data.phone_number) {
     try {
-      const { queueVisitorWelcomeSms } = await import('./notifications');
+      const { queueVisitorWelcomeSms, processPendingNotifications } = await import('./notifications');
+      // Queue the SMS
       await queueVisitorWelcomeSms(
         data.id,
         data.first_name,
@@ -75,8 +76,10 @@ export async function createVisitor(visitor: Omit<Visitor, 'id' | 'created_at'>)
         data.phone_number,
         data.visit_date
       );
+      // Process immediately (don't wait for scheduler)
+      await processPendingNotifications();
     } catch (err) {
-      console.error('Failed to queue visitor welcome SMS:', err);
+      console.error('Failed to send visitor welcome SMS:', err);
       // Don't throw - visitor was created successfully
     }
   }

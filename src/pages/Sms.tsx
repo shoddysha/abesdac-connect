@@ -773,7 +773,15 @@ export function Sms() {
         <>
           {queueQuery.isLoading || statsQuery.isLoading ? (
             <Spinner />
-          ) : (
+          ) : queueQuery.isError ? (
+            <Card>
+              <EmptyState
+                icon={AlertCircle}
+                title="Error Loading Notification History"
+                description={`Failed to load notification data: ${(queueQuery.error as Error)?.message || 'Unknown error'}`}
+              />
+            </Card>
+          ) : ( ) : (
             <>
               {/* Stats Cards */}
               {notificationStats && (

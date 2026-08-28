@@ -26,17 +26,19 @@ export async function createAnnouncement(payload: Partial<Announcement>) {
     undefined
   );
   
-  // If announcement is pinned (broadcast), send SMS to all active members
+  // If announcement is pinned (broadcast), send SMS to all active members immediately
   if (data.is_pinned) {
     try {
-      const { queueAnnouncementBroadcast } = await import('./notifications');
+      const { queueAnnouncementBroadcast, processPendingNotifications } = await import('./notifications');
       await queueAnnouncementBroadcast(
         data.id,
         data.title,
         data.content
       );
+      // Process immediately (don't wait for scheduler)
+      await processPendingNotifications();
     } catch (err) {
-      console.error('Failed to queue announcement broadcast:', err);
+      console.error('Failed to send announcement broadcast:', err);
       // Don't throw - announcement was created successfully
     }
   }
@@ -70,17 +72,19 @@ export async function updateAnnouncement(id: string, payload: Partial<Announceme
     undefined
   );
   
-  // If announcement was just pinned (broadcast enabled), send SMS to all active members
+  // If announcement was just pinned (broadcast enabled), send SMS to all active members immediately
   if (originalAnnouncement && !originalAnnouncement.is_pinned && payload.is_pinned) {
     try {
-      const { queueAnnouncementBroadcast } = await import('./notifications');
+      const { queueAnnouncementBroadcast, processPendingNotifications } = await import('./notifications');
       await queueAnnouncementBroadcast(
         data.id,
         data.title,
         data.content
       );
+      // Process immediately (don't wait for scheduler)
+      await processPendingNotifications();
     } catch (err) {
-      console.error('Failed to queue announcement broadcast:', err);
+      console.error('Failed to send announcement broadcast:', err);
       // Don't throw - announcement update was successful
     }
   }

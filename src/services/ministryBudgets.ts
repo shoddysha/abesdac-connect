@@ -261,16 +261,16 @@ export async function updateBudgetStatus(
     );
   }
 
-  // Queue budget approval/rejection notification to ministry leaders
+  // Send budget approval/rejection notification to ministry leaders immediately
   if (budgetResponse.data && ministryResponse.data && (status === 'approved' || status === 'rejected')) {
     try {
       const budget = budgetResponse.data as any;
       const ministry = ministryResponse.data as any;
       const leaders = ministry.ministries?.leaders || [];
 
-      const { queueBudgetApprovalNotification } = await import('./notifications');
+      const { queueBudgetApprovalNotification, processPendingNotifications } = await import('./notifications');
       
-      // Send to all ministry leaders with phone numbers
+      // Queue notifications for all ministry leaders with phone numbers
       for (const leader of leaders) {
         const member = leader.members;
         if (member?.phone) {
@@ -285,8 +285,11 @@ export async function updateBudgetStatus(
           );
         }
       }
+      
+      // Process immediately (don't wait for scheduler)
+      await processPendingNotifications();
     } catch (err) {
-      console.error('Failed to queue budget approval notification:', err);
+      console.error('Failed to send budget approval notification:', err);
       // Don't throw - status update was successful
     }
   }

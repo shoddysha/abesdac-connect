@@ -51,17 +51,19 @@ export async function updateEvent(id: string, payload: Partial<Event>) {
     undefined
   );
   
-  // If event was just cancelled, send notification to registered attendees
+  // If event was just cancelled, send notification to registered attendees immediately
   if (originalEvent && originalEvent.status !== 'cancelled' && payload.status === 'cancelled') {
     try {
-      const { queueEventCancellationAlert } = await import('./notifications');
+      const { queueEventCancellationAlert, processPendingNotifications } = await import('./notifications');
       await queueEventCancellationAlert(
         id,
         data.title,
         data.start_time
       );
+      // Process immediately (don't wait for scheduler)
+      await processPendingNotifications();
     } catch (err) {
-      console.error('Failed to queue event cancellation alert:', err);
+      console.error('Failed to send event cancellation alert:', err);
       // Don't throw - event update was successful
     }
   }

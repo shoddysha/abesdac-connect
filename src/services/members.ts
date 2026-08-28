@@ -41,10 +41,11 @@ export async function createMember(payload: Partial<Member>) {
   const { data, error } = await supabase.from('members').insert(payload).select().single();
   if (error) throw error;
   
-  // Queue new member welcome series if phone number is provided and status is active
+  // Send new member welcome series immediately if phone number is provided and status is active
   if (data.phone && data.status === 'active') {
     try {
-      const { queueNewMemberWelcomeSeries } = await import('./notifications');
+      const { queueNewMemberWelcomeSeries, processPendingNotifications } = await import('./notifications');
+      // Queue the SMS series
       await queueNewMemberWelcomeSeries(
         data.id,
         data.first_name,
@@ -52,8 +53,10 @@ export async function createMember(payload: Partial<Member>) {
         data.phone,
         data.date_joined
       );
+      // Process immediately (don't wait for scheduler)
+      await processPendingNotifications();
     } catch (err) {
-      console.error('Failed to queue new member welcome series:', err);
+      console.error('Failed to send new member welcome series:', err);
       // Don't throw - member was created successfully
     }
   }

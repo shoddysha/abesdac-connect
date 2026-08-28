@@ -132,16 +132,18 @@ export async function updatePrayerRequest(
     try {
       const member = (originalRequest as any).members;
       if (member?.phone && originalRequest.member_id) {
-        const { queuePrayerAnsweredNotification } = await import('./notifications');
+        const { queuePrayerAnsweredNotification, processPendingNotifications } = await import('./notifications');
         await queuePrayerAnsweredNotification(
           id,
           originalRequest.member_id,
           `${member.first_name} ${member.last_name}`,
           member.phone
         );
+        // Process immediately (don't wait for scheduler)
+        await processPendingNotifications();
       }
     } catch (err) {
-      console.error('Failed to queue prayer answered notification:', err);
+      console.error('Failed to send prayer answered notification:', err);
       // Don't throw - prayer update was successful
     }
   }
