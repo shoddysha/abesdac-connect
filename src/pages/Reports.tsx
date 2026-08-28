@@ -520,7 +520,7 @@ export function Reports() {
                   <td className="px-4 py-3 text-center text-slate-600">{ministry.budgets_submitted}</td>
                   <td className="px-4 py-3 text-center text-slate-600">{ministry.events_hosted}</td>
                   <td className="px-4 py-3 text-center">
-                    <Badge tone={ministry.is_active ? 'primary' : 'default'}>
+                    <Badge tone={ministry.is_active ? 'green' : 'slate'}>
                       {ministry.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </td>
