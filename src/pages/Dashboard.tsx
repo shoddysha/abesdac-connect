@@ -22,6 +22,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { ReportDeadlineNotifications } from '@/components/ReportDeadlineNotifications';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchMemberStats } from '@/services/members';
 import { fetchEvents } from '@/services/events';
@@ -144,6 +145,14 @@ export function Dashboard() {
             tone="primary" 
           />
         </div>
+      )}
+
+      {/* Report Deadline Notifications (Ministry Leaders Only) */}
+      {hasRole('ministry_leader') && (
+        <ReportDeadlineNotifications 
+          variant="compact" 
+          onNavigateToSubmit={() => window.location.href = '/submit-ministry-report'}
+        />
       )}
 
       {/* Alerts & Notifications Row */}

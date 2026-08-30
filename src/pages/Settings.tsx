@@ -5,7 +5,7 @@ import { useState, type ChangeEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { KeyRound, User, Database, Bell, Clock, Shield, Palette, Download } from 'lucide-react';
+import { KeyRound, User, Database, Bell, Clock, Shield, Palette, Download, Mail } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +30,12 @@ const passwordSchema = z
   })
   .refine((d) => d.password === d.confirmPassword, { message: 'Passwords do not match', path: ['confirmPassword'] });
 type PasswordValues = z.infer<typeof passwordSchema>;
+
+const emailSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  confirmEmail: z.string().email('Invalid email address'),
+}).refine((d) => d.email === d.confirmEmail, { message: 'Emails do not match', path: ['confirmEmail'] });
+type EmailValues = z.infer<typeof emailSchema>;
 
 export function Settings() {
   const { profile, hasRole, updatePassword, refreshProfile } = useAuth();
@@ -100,6 +106,8 @@ export function Settings() {
 
   const passwordForm = useForm<PasswordValues>({ resolver: zodResolver(passwordSchema) });
 
+  const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) });
+
   async function onProfileSubmit(values: ProfileValues) {
     if (!profile) return;
     try {
@@ -125,6 +133,18 @@ export function Settings() {
     }
     toast.success('Password updated');
     passwordForm.reset();
+  }
+
+  async function onEmailSubmit(values: EmailValues) {
+    try {
+      const { error } = await supabase.auth.updateUser({ email: values.email });
+      if (error) throw error;
+      
+      toast.success('Verification email sent! Please check your inbox and confirm your new email address.');
+      emailForm.reset();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   }
 
   async function handleBackup() {
@@ -255,10 +275,36 @@ export function Settings() {
 
           <Input label="Full name" {...profileForm.register('full_name')} error={profileForm.formState.errors.full_name?.message} />
           <Input label="Phone" {...profileForm.register('phone')} />
-          <Input label="Email" value={profile?.email ?? ''} disabled hint="Contact an administrator to change your email." />
+          <Input label="Current email" value={profile?.email ?? ''} disabled />
           <Input label="Role" value={profile?.role.replace('_', ' ') ?? ''} disabled />
           <Button type="submit" isLoading={profileForm.formState.isSubmitting}>
             Save changes
+          </Button>
+        </form>
+      </Card>
+
+      <Card>
+        <CardHeader title="Change email" action={<Mail className="h-4 w-4 text-slate-400" />} />
+        <p className="mb-4 text-sm text-slate-500">
+          Update your email address. You'll need to verify the new email before the change takes effect.
+        </p>
+        <form onSubmit={emailForm.handleSubmit(onEmailSubmit)} className="space-y-4">
+          <Input 
+            label="New email" 
+            type="email" 
+            {...emailForm.register('email')} 
+            error={emailForm.formState.errors.email?.message} 
+            placeholder="your.new.email@example.com"
+          />
+          <Input
+            label="Confirm new email"
+            type="email"
+            {...emailForm.register('confirmEmail')}
+            error={emailForm.formState.errors.confirmEmail?.message}
+            placeholder="your.new.email@example.com"
+          />
+          <Button type="submit" isLoading={emailForm.formState.isSubmitting}>
+            Update email
           </Button>
         </form>
       </Card>

@@ -13,6 +13,8 @@ import {
   XCircle,
   Trash2,
   Receipt,
+  Bell,
+  Clock,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -20,6 +22,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { Select, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { SetReportDeadlineModal } from '@/components/SetReportDeadlineModal';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { fetchAllMinistryReports, acknowledgeMinistryReport, unacknowledgeMinistryReport, deleteMinistryReport } from '@/services/ministryReports';
 import { fetchMinistries } from '@/services/ministries';
@@ -36,6 +39,7 @@ export function AllMinistryReports() {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [ackModal, setAckModal] = useState<{ reportId: string } | null>(null);
   const [ackNote, setAckNote] = useState('');
+  const [deadlineModalOpen, setDeadlineModalOpen] = useState(false);
 
   const reportsQuery = useQuery({
     queryKey: ['all-ministry-reports'],
@@ -157,6 +161,13 @@ export function AllMinistryReports() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setDeadlineModalOpen(true)}
+          >
+            <Clock className="h-4 w-4" />
+            Set Deadline
+          </Button>
           <Button
             variant="outline"
             onClick={() => navigate('/ministry-budgets')}
@@ -430,6 +441,11 @@ export function AllMinistryReports() {
           </div>
         </div>
       </Modal>
+
+      <SetReportDeadlineModal 
+        open={deadlineModalOpen}
+        onClose={() => setDeadlineModalOpen(false)}
+      />
     </div>
   );
 }

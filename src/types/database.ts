@@ -263,6 +263,32 @@ export interface MinistryReport {
   updated_at: string;
 }
 
+export interface ReportDeadline {
+  id: string;
+  ministry_id: string;
+  report_type: ReportType;
+  report_period: string;
+  deadline_date: string;
+  title: string;
+  description: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  is_completed: boolean;
+  completed_at: string | null;
+}
+
+export interface ReportDeadlineNotification {
+  id: string;
+  deadline_id: string;
+  leader_id: string;
+  is_read: boolean;
+  is_dismissed: boolean;
+  created_at: string;
+  read_at: string | null;
+  dismissed_at: string | null;
+}
+
 export interface MinistryBudget {
   id: string;
   ministry_id: string;

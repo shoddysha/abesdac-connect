@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
+import { ReportDeadlineNotifications } from '@/components/ReportDeadlineNotifications';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchMinistries } from '@/services/ministries';
 import { fetchEvents } from '@/services/events';
@@ -147,6 +148,9 @@ export function SubmitMinistryReport() {
           View My Reports
         </Button>
       </div>
+
+      {/* Report Deadline Notifications */}
+      <ReportDeadlineNotifications variant="full" />
 
       <Card>
         <form onSubmit={reportForm.handleSubmit(onReportSubmit)} className="space-y-4">

@@ -16,6 +16,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
+import { ReportDeadlineNotifications } from '@/components/ReportDeadlineNotifications';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { fetchMinistries } from '@/services/ministries';
@@ -158,6 +159,12 @@ export function MinistryReports() {
           </Button>
         )}
       </div>
+
+      {/* Report Deadline Notifications */}
+      <ReportDeadlineNotifications 
+        variant="compact"
+        onNavigateToSubmit={() => navigate('/submit-ministry-report')}
+      />
 
       {reports.length === 0 ? (
         <EmptyState

@@ -171,11 +171,17 @@ export function Sms() {
     mutationFn: async () => {
       const { supabase } = await import('@/lib/supabase');
       // Delete all notification queue records
-      const { error } = await supabase.from('notification_queue').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      // Using gt('created_at', '1970-01-01') to match all records instead of neq
+      const { error, count } = await supabase
+        .from('notification_queue')
+        .delete({ count: 'exact' })
+        .gt('created_at', '1970-01-01');
+      
       if (error) throw error;
+      return count;
     },
-    onSuccess: () => {
-      toast.success('Notification history cleared successfully');
+    onSuccess: (count) => {
+      toast.success(`Notification history cleared successfully (${count || 0} records deleted)`);
       queryClient.invalidateQueries({ queryKey: ['notification-queue'] });
       queryClient.invalidateQueries({ queryKey: ['notification-stats'] });
       queryClient.invalidateQueries({ queryKey: ['workflow-stats'] });
