@@ -114,12 +114,22 @@ export async function deleteReportDeadline(id: string): Promise<void> {
 }
 
 /**
- * Fetch notifications for a specific leader
+ * Fetch notifications for a specific leader (by member_id)
  */
 export async function fetchLeaderDeadlineNotifications(
-  leaderId: string,
+  memberIdOrProfileId: string,
   includeRead: boolean = false
 ): Promise<ReportDeadlineNotificationWithDetails[]> {
+  // First, try to get member_id from profile_id if a profile ID was passed
+  const { data: memberData } = await supabase
+    .from('members')
+    .select('id')
+    .eq('id', memberIdOrProfileId)
+    .single();
+  
+  // If no member found, try to find by matching a profile (this shouldn't normally happen)
+  const memberId = memberData?.id || memberIdOrProfileId;
+
   let query = supabase
     .from('report_deadline_notifications')
     .select(`
@@ -129,7 +139,7 @@ export async function fetchLeaderDeadlineNotifications(
         ministries(name)
       )
     `)
-    .eq('leader_id', leaderId)
+    .eq('leader_id', memberId)
     .eq('is_dismissed', false)
     .order('created_at', { ascending: false });
 

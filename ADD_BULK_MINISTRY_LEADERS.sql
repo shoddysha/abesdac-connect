@@ -20,18 +20,16 @@ begin
     ministry_name text  -- The ministry they will lead
   );
 
-  -- ============= EDIT THIS DATA =============
+  -- ============= TEMP LOG INS =============
   insert into temp_leaders (email, password, full_name, ministry_name) values
-    ('youth.leader@church.com', 'Youth123', 'John Mensah', 'Youth Ministry'),
-    ('womens.leader@church.com', 'Women123', 'Grace Adu', 'Women''s Ministry'),
-    ('mens.leader@church.com', 'Men123', 'Kwame Asante', 'Men''s Ministry'),
-    ('praise.leader@church.com', 'Praise123', 'Ama Sarpong', 'Praise & Worship'),
-    ('children.leader@church.com', 'Children123', 'Akosua Boateng', 'Children''s Ministry'),
-    ('media.leader@church.com', 'Media123', 'Kofi Owusu', 'Media Ministry'),
-    ('ushering.leader@church.com', 'Usher123', 'Yaa Amoah', 'Ushering Ministry'),
-    ('evangelism.leader@church.com', 'Evangel123', 'Kwesi Appiah', 'Evangelism'),
-    ('prayer.leader@church.com', 'Prayer123', 'Abena Osei', 'Prayer Ministry'),
-    ('finance.leader@church.com', 'Finance123', 'Nana Frimpong', 'Finance Committee');
+    ('youth@gmail.com', 'Abeka123', 'Decoan', 'Decoan Department'),
+    ('womens@gmail.com', 'Abeka123', 'Women', 'Adventist Women Ministry (AWM)'),
+    ('mens@gmail.com', 'Abeka123', 'Men', 'Adventist Men Ministry (AMM)'),
+    ('personal@gmail.com', 'Abeka123', 'Personal', 'Personal Ministries'),
+    ('children@gmail.com', 'Abeka123', 'Children', 'Children Ministry'),
+    ('music@gmail.com', 'Abeka123', 'Music', 'Music Department'),
+    ('health@gmail.com', 'Abeka123', 'Health', 'Adventist Health Ministry'),
+    ('finance@gmail.com', 'Abeka123', 'Finance', 'Church Finance Committee');
   -- ============= END OF DATA =============
 
   -- Loop through each leader and create them
