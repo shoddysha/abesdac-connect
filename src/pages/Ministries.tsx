@@ -88,6 +88,11 @@ export function Ministries() {
   useRealtimeQuery('ministry_members', ['ministry-member-counts']);
   useRealtimeQuery('profiles', ['ministries']); // When a profile (leader) changes, also invalidate ministries
 
+  // Filter profiles to show only ministry leaders and active users for the leader dropdown
+  const eligibleLeaders = (profilesQuery.data ?? []).filter(
+    (p) => p.is_active && (p.role === 'ministry_leader' || p.role === 'administrator' || p.role === 'pastor')
+  );
+
   // A Ministry Leader manages exactly the one ministry they lead —
   // identified by ministries.leader_id pointing at their own profile.
   // Administrators/secretaries manage every ministry.
@@ -189,7 +194,7 @@ export function Ministries() {
     }
   }
 
-  const leaderOptions = (profilesQuery.data ?? []).map((p) => ({ value: p.id, label: p.full_name }));
+  const leaderOptions = eligibleLeaders.map((p) => ({ value: p.id, label: `${p.full_name} (${p.role})` }));
   const openMembersMinistry = ministriesQuery.data?.find((m) => m.id === membersModalId);
 
   return (
@@ -301,7 +306,13 @@ export function Ministries() {
             label="Leader"
             placeholder="No leader assigned"
             disabled={!canManage}
-            hint={!canManage ? 'Only administrators and secretaries can reassign a ministry leader.' : undefined}
+            hint={
+              !canManage 
+                ? 'Only administrators and secretaries can reassign a ministry leader.' 
+                : eligibleLeaders.length === 0
+                ? 'No eligible leaders found. Create users with "ministry_leader", "pastor", or "administrator" role first.'
+                : 'Select a user to lead this ministry'
+            }
             options={[{ value: '', label: 'No leader assigned' }, ...leaderOptions]}
             {...register('leader_id')}
           />

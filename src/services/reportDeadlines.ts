@@ -114,22 +114,12 @@ export async function deleteReportDeadline(id: string): Promise<void> {
 }
 
 /**
- * Fetch notifications for a specific leader (by member_id)
+ * Fetch notifications for a specific leader (by profile_id)
  */
 export async function fetchLeaderDeadlineNotifications(
-  memberIdOrProfileId: string,
+  profileId: string,
   includeRead: boolean = false
 ): Promise<ReportDeadlineNotificationWithDetails[]> {
-  // First, try to get member_id from profile_id if a profile ID was passed
-  const { data: memberData } = await supabase
-    .from('members')
-    .select('id')
-    .eq('id', memberIdOrProfileId)
-    .single();
-  
-  // If no member found, try to find by matching a profile (this shouldn't normally happen)
-  const memberId = memberData?.id || memberIdOrProfileId;
-
   let query = supabase
     .from('report_deadline_notifications')
     .select(`
@@ -139,7 +129,7 @@ export async function fetchLeaderDeadlineNotifications(
         ministries(name)
       )
     `)
-    .eq('leader_id', memberId)
+    .eq('leader_id', profileId)
     .eq('is_dismissed', false)
     .order('created_at', { ascending: false });
 
@@ -224,19 +214,19 @@ export async function getUnreadNotificationCount(leaderId: string): Promise<numb
 /**
  * Get upcoming deadlines for a leader (next 7 days)
  */
-export async function getUpcomingDeadlines(leaderId: string): Promise<ReportDeadlineWithDetails[]> {
+export async function getUpcomingDeadlines(profileId: string): Promise<ReportDeadlineWithDetails[]> {
   const now = new Date();
   const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  // Get ministry IDs where user is a leader
-  const { data: leaderData, error: leaderError } = await supabase
-    .from('ministry_leaders')
-    .select('ministry_id')
-    .eq('member_id', leaderId);
+  // Get ministries where user is a leader
+  const { data: ministryData, error: ministryError } = await supabase
+    .from('ministries')
+    .select('id')
+    .eq('leader_id', profileId);
 
-  if (leaderError) throw leaderError;
+  if (ministryError) throw ministryError;
 
-  const ministryIds = leaderData?.map((l: any) => l.ministry_id) || [];
+  const ministryIds = ministryData?.map((m: any) => m.id) || [];
 
   if (ministryIds.length === 0) {
     return [];
@@ -265,18 +255,18 @@ export async function getUpcomingDeadlines(leaderId: string): Promise<ReportDead
 /**
  * Get overdue deadlines for a leader
  */
-export async function getOverdueDeadlines(leaderId: string): Promise<ReportDeadlineWithDetails[]> {
+export async function getOverdueDeadlines(profileId: string): Promise<ReportDeadlineWithDetails[]> {
   const now = new Date();
 
-  // Get ministry IDs where user is a leader
-  const { data: leaderData, error: leaderError } = await supabase
-    .from('ministry_leaders')
-    .select('ministry_id')
-    .eq('member_id', leaderId);
+  // Get ministries where user is a leader
+  const { data: ministryData, error: ministryError } = await supabase
+    .from('ministries')
+    .select('id')
+    .eq('leader_id', profileId);
 
-  if (leaderError) throw leaderError;
+  if (ministryError) throw ministryError;
 
-  const ministryIds = leaderData?.map((l: any) => l.ministry_id) || [];
+  const ministryIds = ministryData?.map((m: any) => m.id) || [];
 
   if (ministryIds.length === 0) {
     return [];
