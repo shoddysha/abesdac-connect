@@ -4,9 +4,20 @@ import type { Ministry } from '@/types/database';
 export async function fetchMinistries() {
   const { data, error } = await supabase
     .from('ministries')
-    .select('*, profiles!ministries_leader_id_fkey(full_name)')
+    .select(`
+      *,
+      profiles:leader_id (
+        full_name
+      )
+    `)
     .order('name');
-  if (error) throw error;
+  
+  if (error) {
+    console.error('Error fetching ministries:', error);
+    throw error;
+  }
+  
+  console.log('Fetched ministries:', data);
   return data as (Ministry & { profiles: { full_name: string } | null })[];
 }
 

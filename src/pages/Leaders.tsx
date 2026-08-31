@@ -73,20 +73,25 @@ export function Leaders() {
   const userMinistry = ministriesQuery.data?.find((m) => m.leader_id === profile?.id);
 
   const membersQuery = useQuery({
-    queryKey: ['members', { ministry_id: userMinistry?.id }],
+    queryKey: ['members', { status: 'active' }],
     queryFn: async () => {
-      if (!userMinistry?.id) return [];
-      // Fetch only members from the ministry leader's ministry
+      // Secretaries and admins can see all active members
+      // Ministry leaders only see members from their ministry
       const { data, error } = await supabase
         .from('members')
         .select('*')
         .eq('status', 'active')
-        .or(`ministry_id.eq.${userMinistry.id},ministry_id.is.null`)
         .order('first_name');
       if (error) throw error;
+      
+      // If user is a ministry leader (not secretary/admin), filter to their ministry only
+      if (hasRole('ministry_leader') && !hasRole('secretary') && userMinistry?.id) {
+        return (data || []).filter(m => m.ministry_id === userMinistry.id || !m.ministry_id);
+      }
+      
       return data || [];
     },
-    enabled: canEdit && !!userMinistry,
+    enabled: canEdit,
   });
 
   useRealtimeQuery('ministry_leaders', ['ministry-leaders']);
@@ -347,11 +352,18 @@ export function Leaders() {
           <Select
             label="Member"
             disabled={!!editingLeader}
+            hint={
+              membersQuery.isLoading 
+                ? 'Loading members...' 
+                : (membersQuery.data?.length === 0)
+                ? 'No active members found. Add members first.'
+                : 'Select a church member to assign as leader'
+            }
             options={[
               { value: '', label: 'Select member' },
               ...(membersQuery.data || []).map((m) => ({
                 value: m.id,
-                label: `${m.first_name} ${m.last_name} (${m.member_code})`,
+                label: `${m.first_name} ${m.last_name} (${m.member_code})${m.ministry_id ? ' - Already in ministry' : ''}`,
               })),
             ]}
             {...register('member_id')}

@@ -86,7 +86,7 @@ export function Ministries() {
   });
   useRealtimeQuery('ministries', ['ministries']);
   useRealtimeQuery('ministry_members', ['ministry-member-counts']);
-  useRealtimeQuery('profiles', ['ministries']); // When a profile (leader) changes, also invalidate ministries
+  useRealtimeQuery('profiles', ['profiles', 'ministries']); // When a profile (leader) changes, also invalidate ministries and profiles
 
   // Filter profiles to show only ministry leaders and active users for the leader dropdown
   const eligibleLeaders = (profilesQuery.data ?? []).filter(
@@ -204,11 +204,23 @@ export function Ministries() {
           <h1 className="text-2xl font-bold text-ink">Ministries/Departments</h1>
           <p className="text-sm text-slate-500">Manage church ministries, leaders, and members.</p>
         </div>
-        {canManage && (
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> New ministry
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['ministries'] });
+              queryClient.invalidateQueries({ queryKey: ['profiles'] });
+              toast.success('Refreshed');
+            }}
+          >
+            Refresh
           </Button>
-        )}
+          {canManage && (
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4" /> New ministry
+            </Button>
+          )}
+        </div>
       </div>
 
       {ministriesQuery.isLoading ? (
