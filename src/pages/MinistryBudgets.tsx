@@ -88,8 +88,9 @@ export function MinistryBudgets() {
     ? budgets 
     : budgets.filter((b) => b.status === statusFilter);
 
-  function handleDelete(id: string, title: string) {
-    if (confirm(`Delete budget "${title}"?`)) {
+  function handleDelete(id: string, title: string, status: string) {
+    const statusText = status === 'pending' ? 'pending' : `${status} (reviewed)`;
+    if (confirm(`Delete ${statusText} budget "${title}"? This action cannot be undone.`)) {
       deleteMutation.mutate(id);
     }
   }
@@ -291,7 +292,8 @@ export function MinistryBudgets() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => handleDelete(budget.id, budget.title)}
+                    onClick={() => handleDelete(budget.id, budget.title, budget.status)}
+                    title="Delete this budget"
                   >
                     <Trash2 className="h-4 w-4 text-red-600" />
                   </Button>

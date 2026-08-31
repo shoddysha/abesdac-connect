@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { useState } from 'react';
 import { 
   Users, 
   UserCheck, 
@@ -22,7 +23,8 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { ReportDeadlineNotifications } from '@/components/ReportDeadlineNotifications';
+import { DeadlineNotificationsButton } from '@/components/DeadlineNotificationsButton';
+import { DeadlineNotificationsModal } from '@/components/DeadlineNotificationsModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchMemberStats } from '@/services/members';
 import { fetchEvents } from '@/services/events';
@@ -38,6 +40,7 @@ const GENDER_COLORS = ['#1E5EFF', '#D4A76A'];
 
 export function Dashboard() {
   const { hasRole, profile } = useAuth();
+  const [deadlineModalOpen, setDeadlineModalOpen] = useState(false);
   
   const statsQuery = useQuery({ queryKey: ['member-stats'], queryFn: fetchMemberStats });
   const eventsQuery = useQuery({ queryKey: ['events'], queryFn: fetchEvents });
@@ -117,12 +120,17 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header with greeting */}
-      <div>
-        <h1 className="text-2xl font-bold text-ink">
-          Welcome back, {profile?.full_name?.split(' ')[0] || 'User'}!
-        </h1>
-        <p className="text-sm text-slate-500">Here's what's happening at Abeka SDA Church today.</p>
+      {/* Header with greeting and actions */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-ink">
+            Welcome back, {profile?.full_name?.split(' ')[0] || 'User'}!
+          </h1>
+          <p className="text-sm text-slate-500">Here's what's happening at Abeka SDA Church today.</p>
+        </div>
+        {hasRole('ministry_leader') && (
+          <DeadlineNotificationsButton onClick={() => setDeadlineModalOpen(true)} />
+        )}
       </div>
 
       {/* Key Stats */}
@@ -145,14 +153,6 @@ export function Dashboard() {
             tone="primary" 
           />
         </div>
-      )}
-
-      {/* Report Deadline Notifications (Ministry Leaders Only) */}
-      {hasRole('ministry_leader') && (
-        <ReportDeadlineNotifications 
-          variant="compact" 
-          onNavigateToSubmit={() => window.location.href = '/submit-ministry-report'}
-        />
       )}
 
       {/* Alerts & Notifications Row */}
@@ -552,6 +552,16 @@ export function Dashboard() {
           )}
         </Card>
       </div>
+
+      {/* Deadline Notifications Modal */}
+      <DeadlineNotificationsModal 
+        open={deadlineModalOpen}
+        onClose={() => setDeadlineModalOpen(false)}
+        onNavigateToSubmit={() => {
+          setDeadlineModalOpen(false);
+          window.location.href = '/submit-ministry-report';
+        }}
+      />
     </div>
   );
 }

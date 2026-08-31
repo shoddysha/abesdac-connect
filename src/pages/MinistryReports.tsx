@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Plus,
@@ -16,7 +17,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
-import { ReportDeadlineNotifications } from '@/components/ReportDeadlineNotifications';
+import { DeadlineNotificationsButton } from '@/components/DeadlineNotificationsButton';
+import { DeadlineNotificationsModal } from '@/components/DeadlineNotificationsModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { fetchMinistries } from '@/services/ministries';
@@ -31,6 +33,7 @@ export function MinistryReports() {
   const { profile, hasRole } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [deadlineModalOpen, setDeadlineModalOpen] = useState(false);
 
   const canEdit = hasRole('ministry_leader'); // Only ministry leaders can edit
 
@@ -153,18 +156,15 @@ export function MinistryReports() {
             </p>
           </div>
         </div>
-        {canEdit && (
-          <Button onClick={() => navigate('/submit-ministry-report')}>
-            <Plus className="h-4 w-4" /> Submit Report
-          </Button>
-        )}
+        <div className="flex gap-2">
+          <DeadlineNotificationsButton onClick={() => setDeadlineModalOpen(true)} />
+          {canEdit && (
+            <Button onClick={() => navigate('/submit-ministry-report')}>
+              <Plus className="h-4 w-4" /> Submit Report
+            </Button>
+          )}
+        </div>
       </div>
-
-      {/* Report Deadline Notifications */}
-      <ReportDeadlineNotifications 
-        variant="compact"
-        onNavigateToSubmit={() => navigate('/submit-ministry-report')}
-      />
 
       {reports.length === 0 ? (
         <EmptyState
@@ -285,6 +285,16 @@ export function MinistryReports() {
           ))}
         </div>
       )}
+
+      {/* Deadline Notifications Modal */}
+      <DeadlineNotificationsModal 
+        open={deadlineModalOpen}
+        onClose={() => setDeadlineModalOpen(false)}
+        onNavigateToSubmit={() => {
+          setDeadlineModalOpen(false);
+          navigate('/submit-ministry-report');
+        }}
+      />
     </div>
   );
 }
