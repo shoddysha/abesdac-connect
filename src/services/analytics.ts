@@ -602,7 +602,7 @@ export async function getDeadlineMetrics(startDate: Date, endDate: Date) {
   // Group by ministry
   const byMinistry: Record<string, { total: number; completed: number; overdue: number }> = {};
   (deadlines || []).forEach(deadline => {
-    const ministryName = deadline.ministries?.name || 'Unknown';
+    const ministryName = (deadline.ministries as any)?.name || 'Unknown';
     if (!byMinistry[ministryName]) {
       byMinistry[ministryName] = { total: 0, completed: 0, overdue: 0 };
     }
