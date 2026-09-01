@@ -547,7 +547,7 @@ export async function checkInactiveMembers(): Promise<number> {
 
   for (const member of members || []) {
     // Check last attendance
-    const { data: lastAttendance } = await supabase
+    const { data: lastAttendance, error: attendanceError } = await supabase
       .from('attendance')
       .select('service_date')
       .eq('member_id', member.id)
@@ -555,7 +555,8 @@ export async function checkInactiveMembers(): Promise<number> {
       .limit(1)
       .single();
 
-    if (!lastAttendance) continue;
+    // Skip if error fetching attendance (e.g., RLS policy issue)
+    if (attendanceError || !lastAttendance) continue;
 
     const lastDate = parseISO(lastAttendance.service_date);
     const daysInactive = differenceInDays(new Date(), lastDate);
