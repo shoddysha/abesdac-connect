@@ -1,17 +1,43 @@
 import { useState } from 'react';
-import { Bell, Megaphone, FileText, Heart, DollarSign } from 'lucide-react';
+import { Bell, Megaphone, FileText, Heart, DollarSign, Clock, Eye } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Modal } from '@/components/ui/Modal';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useNotificationCounts } from '@/hooks/useNotificationCounts';
+import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { ReportDeadlineNotifications } from '@/components/ReportDeadlineNotifications';
+import { fetchAnnouncementsWithViewStatus, markAnnouncementAsViewed } from '@/services/announcements';
+import { useQuery } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 
 export function NotificationsButton() {
   const [modalOpen, setModalOpen] = useState(false);
   const { data: counts } = useNotificationCounts();
+  const { hasRole } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  // Fetch unviewed announcements
+  const { data: announcements } = useQuery({
+    queryKey: ['announcements-with-views'],
+    queryFn: fetchAnnouncementsWithViewStatus,
+    enabled: modalOpen && (counts?.announcements ?? 0) > 0,
+  });
+
+  const unviewedAnnouncements = announcements?.filter(a => !a.has_viewed).slice(0, 5) || [];
+
+  const markViewedMutation = useMutation({
+    mutationFn: markAnnouncementAsViewed,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['announcements-with-views'] });
+      toast.success('Marked as viewed');
+    },
+  });
 
   const totalCount = counts?.total || 0;
 
@@ -45,6 +71,36 @@ export function NotificationsButton() {
           />
         ) : (
           <div className="space-y-3">
+            {/* Deadlines (Ministry Leaders only) */}
+            {hasRole('ministry_leader') && counts && counts.deadlines > 0 && (
+              <Card className="hover:shadow-md transition-shadow">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-red-50 rounded-lg">
+                    <Clock className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-ink">Report Deadlines</h3>
+                      <Badge tone="red">{counts.deadlines}</Badge>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-3">
+                      {counts.deadlines} deadline{counts.deadlines !== 1 ? 's' : ''} require{counts.deadlines === 1 ? 's' : ''} your attention
+                    </p>
+                    {/* Embedded deadline list */}
+                    <div className="border-t border-slate-100 pt-3 -mb-1">
+                      <ReportDeadlineNotifications 
+                        variant="full"
+                        onNavigateToSubmit={() => {
+                          navigate('/submit-ministry-report');
+                          setModalOpen(false);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
             {/* Announcements */}
             {counts && counts.announcements > 0 && (
               <Card className="hover:shadow-md transition-shadow">
@@ -58,8 +114,32 @@ export function NotificationsButton() {
                       <Badge tone="purple">{counts.announcements}</Badge>
                     </div>
                     <p className="text-sm text-slate-600 mb-3">
-                      {counts.announcements} announcement{counts.announcements !== 1 ? 's' : ''} from the past 30 days
+                      {counts.announcements} unviewed announcement{counts.announcements !== 1 ? 's' : ''}
                     </p>
+                    
+                    {/* List of unviewed announcements */}
+                    {unviewedAnnouncements.length > 0 && (
+                      <div className="space-y-2 mb-3 border-t border-slate-100 pt-3">
+                        {unviewedAnnouncements.map((announcement) => (
+                          <div key={announcement.id} className="flex items-start justify-between gap-2 p-2 bg-slate-50 rounded">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-ink truncate">{announcement.title}</p>
+                              <p className="text-xs text-slate-500 truncate">{announcement.content.substring(0, 60)}...</p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => markViewedMutation.mutate(announcement.id)}
+                              isLoading={markViewedMutation.isPending}
+                              title="Mark as viewed"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <Button
                       size="sm"
                       variant="outline"

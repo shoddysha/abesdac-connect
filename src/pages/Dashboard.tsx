@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
 import { 
   Users, 
   UserCheck, 
@@ -23,8 +22,6 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { DeadlineNotificationsButton } from '@/components/DeadlineNotificationsButton';
-import { DeadlineNotificationsModal } from '@/components/DeadlineNotificationsModal';
 import { NotificationsButton } from '@/components/NotificationsButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchMemberStats } from '@/services/members';
@@ -41,7 +38,6 @@ const GENDER_COLORS = ['#1E5EFF', '#D4A76A'];
 
 export function Dashboard() {
   const { hasRole, profile } = useAuth();
-  const [deadlineModalOpen, setDeadlineModalOpen] = useState(false);
   
   const statsQuery = useQuery({ queryKey: ['member-stats'], queryFn: fetchMemberStats });
   const eventsQuery = useQuery({ queryKey: ['events'], queryFn: fetchEvents });
@@ -131,9 +127,6 @@ export function Dashboard() {
         </div>
         <div className="flex gap-2">
           <NotificationsButton />
-          {hasRole('ministry_leader') && (
-            <DeadlineNotificationsButton onClick={() => setDeadlineModalOpen(true)} />
-          )}
         </div>
       </div>
 
@@ -536,16 +529,6 @@ export function Dashboard() {
           )}
         </Card>
       </div>
-
-      {/* Deadline Notifications Modal */}
-      <DeadlineNotificationsModal 
-        open={deadlineModalOpen}
-        onClose={() => setDeadlineModalOpen(false)}
-        onNavigateToSubmit={() => {
-          setDeadlineModalOpen(false);
-          window.location.href = '/submit-ministry-report';
-        }}
-      />
     </div>
   );
 }

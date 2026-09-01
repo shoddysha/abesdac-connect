@@ -1,37 +1,74 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { getUnviewedAnnouncementCount } from '@/services/announcements';
 
 export interface NotificationCounts {
   ministryReports: number;
   memberFollowUps: number;
   budgets: number;
   announcements: number;
+  deadlines: number;
   total: number;
 }
 
 export function useNotificationCounts() {
   const { profile, hasRole } = useAuth();
   const isAdminOrSecretary = hasRole('administrator', 'secretary');
+  const isMinistryLeader = hasRole('ministry_leader');
 
   return useQuery({
     queryKey: ['notification-counts', profile?.id],
     queryFn: async (): Promise<NotificationCounts> => {
-      // Count recent active announcements (available to all roles)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Count UNVIEWED announcements (available to all roles)
+      const announcements = await getUnviewedAnnouncementCount();
 
-      const { count: announcementsCount } = await supabase
-        .from('announcements')
-        .select('*', { count: 'exact', head: true })
-        .gte('published_at', thirtyDaysAgo.toISOString())
-        .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`);
+      // Ministry Leader specific counts (deadlines)
+      let deadlines = 0;
+      if (isMinistryLeader && profile?.id) {
+        // Get ministries where user is a leader
+        const { data: ministryData } = await supabase
+          .from('ministries')
+          .select('id')
+          .eq('leader_id', profile.id);
 
-      const announcements = announcementsCount || 0;
+        const ministryIds = ministryData?.map((m: any) => m.id) || [];
+
+        if (ministryIds.length > 0) {
+          const now = new Date();
+          const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+          // Count upcoming deadlines (next 7 days)
+          const { count: upcomingCount } = await supabase
+            .from('report_deadlines')
+            .select('*', { count: 'exact', head: true })
+            .in('ministry_id', ministryIds)
+            .eq('is_completed', false)
+            .gte('deadline_date', now.toISOString())
+            .lte('deadline_date', sevenDaysLater.toISOString());
+
+          // Count overdue deadlines
+          const { count: overdueCount } = await supabase
+            .from('report_deadlines')
+            .select('*', { count: 'exact', head: true })
+            .in('ministry_id', ministryIds)
+            .eq('is_completed', false)
+            .lt('deadline_date', now.toISOString());
+
+          deadlines = (upcomingCount || 0) + (overdueCount || 0);
+        }
+      }
 
       // Admin/Secretary specific counts
       if (!isAdminOrSecretary) {
-        return { ministryReports: 0, memberFollowUps: 0, budgets: 0, announcements, total: announcements };
+        return { 
+          ministryReports: 0, 
+          memberFollowUps: 0, 
+          budgets: 0, 
+          announcements, 
+          deadlines,
+          total: announcements + deadlines 
+        };
       }
 
       // Count unacknowledged ministry reports
@@ -55,9 +92,9 @@ export function useNotificationCounts() {
       const ministryReports = reportsCount || 0;
       const memberFollowUps = followUpsCount || 0;
       const budgets = budgetsCount || 0;
-      const total = ministryReports + memberFollowUps + budgets + announcements;
+      const total = ministryReports + memberFollowUps + budgets + announcements + deadlines;
 
-      return { ministryReports, memberFollowUps, budgets, announcements, total };
+      return { ministryReports, memberFollowUps, budgets, announcements, deadlines, total };
     },
     enabled: !!profile?.id,
     refetchInterval: 30000, // Refetch every 30 seconds

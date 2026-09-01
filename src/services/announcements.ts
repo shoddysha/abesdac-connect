@@ -2,6 +2,19 @@ import { supabase } from '@/lib/supabase';
 import type { Announcement } from '@/types/database';
 import { logAudit } from './audit';
 
+export interface AnnouncementView {
+  id: string;
+  announcement_id: string;
+  user_id: string;
+  viewed_at: string;
+  created_at: string;
+}
+
+export interface AnnouncementWithViews extends Announcement {
+  has_viewed?: boolean;
+  view_count?: number;
+}
+
 export async function fetchAnnouncements() {
   const { data, error } = await supabase
     .from('announcements')
@@ -10,6 +23,116 @@ export async function fetchAnnouncements() {
     .order('published_at', { ascending: false });
   if (error) throw error;
   return data as Announcement[];
+}
+
+/**
+ * Fetch announcements with view status for current user
+ */
+export async function fetchAnnouncementsWithViewStatus(): Promise<AnnouncementWithViews[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('*')
+    .order('is_pinned', { ascending: false })
+    .order('published_at', { ascending: false });
+
+  if (error) throw error;
+
+  // Get user's viewed announcements
+  const { data: views } = await supabase
+    .from('announcement_views')
+    .select('announcement_id')
+    .eq('user_id', user.id);
+
+  const viewedIds = new Set(views?.map(v => v.announcement_id) || []);
+
+  return (data || []).map(announcement => ({
+    ...announcement,
+    has_viewed: viewedIds.has(announcement.id),
+  }));
+}
+
+/**
+ * Mark an announcement as viewed by current user
+ */
+export async function markAnnouncementAsViewed(announcementId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  // Insert view record (unique constraint prevents duplicates)
+  const { error } = await supabase
+    .from('announcement_views')
+    .insert({
+      announcement_id: announcementId,
+      user_id: user.id,
+    });
+
+  // Ignore unique constraint violation (user already viewed)
+  if (error && !error.message.includes('duplicate') && !error.code?.includes('23505')) {
+    throw error;
+  }
+}
+
+/**
+ * Get view count and viewer list for an announcement (admin/secretary only)
+ */
+export async function getAnnouncementViews(announcementId: string) {
+  const { data, error } = await supabase
+    .from('announcement_views')
+    .select(`
+      id,
+      viewed_at,
+      profiles:user_id(
+        id,
+        full_name,
+        email
+      )
+    `)
+    .eq('announcement_id', announcementId)
+    .order('viewed_at', { ascending: false });
+
+  if (error) throw error;
+
+  return {
+    count: data?.length || 0,
+    views: data || [],
+  };
+}
+
+/**
+ * Get unviewed announcement count for current user
+ */
+export async function getUnviewedAnnouncementCount(): Promise<number> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  // Get recent active announcements
+  const { data: announcements } = await supabase
+    .from('announcements')
+    .select('id')
+    .gte('published_at', thirtyDaysAgo.toISOString())
+    .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`);
+
+  if (!announcements || announcements.length === 0) return 0;
+
+  const announcementIds = announcements.map(a => a.id);
+
+  // Get viewed announcements
+  const { data: views } = await supabase
+    .from('announcement_views')
+    .select('announcement_id')
+    .eq('user_id', user.id)
+    .in('announcement_id', announcementIds);
+
+  const viewedIds = new Set(views?.map(v => v.announcement_id) || []);
+  
+  // Count unviewed
+  return announcementIds.filter(id => !viewedIds.has(id)).length;
 }
 
 export async function createAnnouncement(payload: Partial<Announcement>) {

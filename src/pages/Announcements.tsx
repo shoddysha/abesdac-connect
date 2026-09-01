@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Pin, Megaphone, MessageSquare } from 'lucide-react';
+import { Plus, Pencil, Trash2, Pin, Megaphone, MessageSquare, Eye, Check } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -14,10 +14,11 @@ import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import {
-  fetchAnnouncements,
+  fetchAnnouncementsWithViewStatus,
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
+  markAnnouncementAsViewed,
 } from '@/services/announcements';
 import { SendSmsModal } from '@/features/sms/SendSmsModal';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
@@ -35,8 +36,6 @@ type FormValues = z.infer<typeof schema>;
 export function Announcements() {
   const [searchParams] = useSearchParams();
   const { hasRole, profile } = useAuth();
-  // Ministry Leaders can post announcements; who can edit/delete/pin a
-  // *specific* one is decided per-row below via canManageAnnouncement().
   const canManage = hasRole('administrator', 'secretary');
   const canCreate = hasRole('administrator', 'secretary', 'ministry_leader');
   const queryClient = useQueryClient();
@@ -45,8 +44,11 @@ export function Announcements() {
   const [smsModalOpen, setSmsModalOpen] = useState(false);
   const [selectedAnnouncementForSms, setSelectedAnnouncementForSms] = useState<Announcement | null>(null);
 
-  const query = useQuery({ queryKey: ['announcements'], queryFn: fetchAnnouncements });
-  useRealtimeQuery('announcements', ['announcements']);
+  const query = useQuery({ 
+    queryKey: ['announcements-with-views'], 
+    queryFn: fetchAnnouncementsWithViewStatus 
+  });
+  useRealtimeQuery('announcements', ['announcements-with-views']);
 
   const {
     register,
@@ -57,8 +59,15 @@ export function Announcements() {
 
   const announcements = query.data ?? [];
 
-  // Admin/secretary manage every announcement; a Ministry Leader only
-  // manages announcements they personally posted.
+  const markViewedMutation = useMutation({
+    mutationFn: markAnnouncementAsViewed,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements-with-views'] });
+      queryClient.invalidateQueries({ queryKey: ['notification-counts'] });
+      toast.success('Marked as viewed');
+    },
+  });
+
   function canManageAnnouncement(a: Announcement) {
     return canManage || (profile?.role === 'ministry_leader' && a.created_by === profile.id);
   }
@@ -92,7 +101,7 @@ export function Announcements() {
         toast.success('Announcement posted');
       }
       setFormOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+      queryClient.invalidateQueries({ queryKey: ['announcements-with-views'] });
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -103,13 +112,13 @@ export function Announcements() {
     if (!confirm('Delete this announcement?')) return;
     await deleteAnnouncement(a.id);
     toast.success('Announcement deleted');
-    queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    queryClient.invalidateQueries({ queryKey: ['announcements-with-views'] });
   }
 
   async function togglePin(a: Announcement) {
     if (!canManageAnnouncement(a)) return;
     await updateAnnouncement(a.id, { is_pinned: !a.is_pinned });
-    queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    queryClient.invalidateQueries({ queryKey: ['announcements-with-views'] });
   }
 
   function openSmsModal(announcement: Announcement) {
@@ -138,44 +147,67 @@ export function Announcements() {
       ) : (
         <div className="space-y-3">
           {announcements.map((a) => (
-            <Card key={a.id}>
+            <Card key={a.id} className={!a.has_viewed ? 'border-l-4 border-l-purple-500' : ''}>
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     {a.is_pinned && <Pin className="h-3.5 w-3.5 text-accent shrink-0" />}
                     <h3 className="font-semibold text-ink truncate">{a.title}</h3>
                     {a.is_pinned && <Badge tone="amber">Pinned</Badge>}
+                    {!a.has_viewed && <Badge tone="purple">New</Badge>}
                   </div>
                   <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600 break-words">{a.body}</p>
-                  <p className="mt-3 text-xs text-slate-400 break-words">
-                    Published {formatDistanceToNow(new Date(a.published_at), { addSuffix: true })}
-                    {a.expires_at && ` · Expires ${format(new Date(a.expires_at), 'MMM d, yyyy')}`}
-                  </p>
-                </div>
-                {canManageAnnouncement(a) && (
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      onClick={() => openSmsModal(a)}
-                      className="rounded-md p-1.5 text-slate-400 hover:bg-secondary-50 hover:text-secondary"
-                      title="Send SMS"
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => togglePin(a)}
-                      className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-ink"
-                      title={a.is_pinned ? 'Unpin' : 'Pin'}
-                    >
-                      <Pin className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => openEdit(a.id)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-ink">
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => handleDelete(a)} className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                    <span>Published {formatDistanceToNow(new Date(a.published_at), { addSuffix: true })}</span>
+                    {a.expires_at && <span>· Expires {format(new Date(a.expires_at), 'MMM d, yyyy')}</span>}
+                    {canManage && a.view_count !== undefined && (
+                      <span className="flex items-center gap-1">
+                        <Eye className="h-3 w-3" />
+                        {a.view_count} view{a.view_count !== 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
-                )}
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  {!a.has_viewed && (
+                    <button
+                      onClick={() => markViewedMutation.mutate(a.id)}
+                      className="rounded-md p-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100"
+                      title="Mark as viewed"
+                      disabled={markViewedMutation.isPending}
+                    >
+                      {markViewedMutation.isPending ? (
+                        <Spinner />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+                  {canManageAnnouncement(a) && (
+                    <>
+                      <button
+                        onClick={() => openSmsModal(a)}
+                        className="rounded-md p-1.5 text-slate-400 hover:bg-secondary-50 hover:text-secondary"
+                        title="Send SMS"
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => togglePin(a)}
+                        className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-ink"
+                        title={a.is_pinned ? 'Unpin' : 'Pin'}
+                      >
+                        <Pin className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => openEdit(a.id)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-ink">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => handleDelete(a)} className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </Card>
           ))}
@@ -213,7 +245,7 @@ export function Announcements() {
           defaultMessage={`${selectedAnnouncementForSms.title}\n\n${selectedAnnouncementForSms.body}`}
           smsType="announcement"
           announcementId={selectedAnnouncementForSms.id}
-          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['announcements'] })}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['announcements-with-views'] })}
         />
       )}
     </div>
