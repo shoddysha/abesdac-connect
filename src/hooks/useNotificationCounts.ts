@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUnviewedAnnouncementCount } from '@/services/announcements';
+import { useRealtimeQuery } from './useRealtimeQuery';
 
 export interface NotificationCounts {
   ministryReports: number;
@@ -17,7 +18,7 @@ export function useNotificationCounts() {
   const isAdminOrSecretary = hasRole('administrator', 'secretary');
   const isMinistryLeader = hasRole('ministry_leader');
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['notification-counts', profile?.id],
     queryFn: async (): Promise<NotificationCounts> => {
       // Count UNVIEWED announcements (available to all roles)
@@ -97,6 +98,15 @@ export function useNotificationCounts() {
       return { ministryReports, memberFollowUps, budgets, announcements, deadlines, total };
     },
     enabled: !!profile?.id,
-    refetchInterval: 30000, // Refetch every 30 seconds
   });
+
+  // Set up real-time subscriptions to auto-refresh counts when data changes
+  useRealtimeQuery('announcements', ['notification-counts', profile?.id]);
+  useRealtimeQuery('announcement_views', ['notification-counts', profile?.id]);
+  useRealtimeQuery('report_deadlines', ['notification-counts', profile?.id]);
+  useRealtimeQuery('ministry_reports', ['notification-counts', profile?.id]);
+  useRealtimeQuery('member_follow_ups', ['notification-counts', profile?.id]);
+  useRealtimeQuery('ministry_budgets', ['notification-counts', profile?.id]);
+
+  return query;
 }

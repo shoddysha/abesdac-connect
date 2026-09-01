@@ -571,7 +571,7 @@ export function Settings() {
         <img src="/abeka.png" alt="Abeka SDA Church logo" className="h-8 w-8 rounded-md object-contain" />
         <div>
           <p className="text-sm font-medium text-ink">ABESDAC_Connect</p>
-          <p className="text-xs text-slate-500">Church management system for Abeka SDA Church · v1.0.0</p>
+          <p className="text-xs text-slate-500">Church management system for Abeka SDA Church · v4.1.0</p>
         </div>
       </Card>
     </div>

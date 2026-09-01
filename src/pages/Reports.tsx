@@ -14,8 +14,12 @@ import {
   FileText,
   BarChart3,
   ArrowUp,
-  ArrowDown
-} from 'lucide-react';, Eye, CheckCircle, Clock, Heart
+  ArrowDown,
+  Eye,
+  CheckCircle,
+  Clock,
+  Heart
+} from 'lucide-react';
 import { 
   BarChart, 
   Bar, 
@@ -52,10 +56,10 @@ import {
   getEngagementMetrics,
   getRetentionMetrics,
   getComparisonData,
-} from '@/services/analytics';
   getAnnouncementMetrics,
   getDeadlineMetrics,
   getFollowUpMetrics,
+} from '@/services/analytics';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { exportToCSV, exportToExcel, exportToPDF } from '@/utils/export';
 
