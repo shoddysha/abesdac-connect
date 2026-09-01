@@ -447,9 +447,11 @@ alter table public.announcements enable row level security;
 alter table public.audit_logs enable row level security;
 
 -- ---- PROFILES ----
+-- Allow all authenticated users to view profiles (needed for ministry leader display, etc.)
 drop policy if exists "profiles_select_own_or_admin" on public.profiles;
-create policy "profiles_select_own_or_admin" on public.profiles
-  for select using (auth.uid() = id or public.is_admin());
+drop policy if exists "profiles_select_authenticated" on public.profiles;
+create policy "profiles_select_authenticated" on public.profiles
+  for select using (true);
 
 drop policy if exists "profiles_update_own_or_admin" on public.profiles;
 create policy "profiles_update_own_or_admin" on public.profiles

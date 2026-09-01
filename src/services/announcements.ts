@@ -61,6 +61,13 @@ export async function markAnnouncementAsViewed(announcementId: string): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  // Get announcement title for audit log
+  const { data: announcement } = await supabase
+    .from('announcements')
+    .select('title')
+    .eq('id', announcementId)
+    .single();
+
   // Insert view record (unique constraint prevents duplicates)
   const { error } = await supabase
     .from('announcement_views')
@@ -72,6 +79,18 @@ export async function markAnnouncementAsViewed(announcementId: string): Promise<
   // Ignore unique constraint violation (user already viewed)
   if (error && !error.message.includes('duplicate') && !error.code?.includes('23505')) {
     throw error;
+  }
+
+  // Log audit (only if successfully inserted, not if duplicate)
+  if (!error && announcement) {
+    await logAudit(
+      'create',
+      'announcement_views',
+      `Viewed announcement: ${announcement.title}`,
+      announcementId,
+      user.id,
+      undefined
+    );
   }
 }
 

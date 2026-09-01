@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { ReportDeadline, ReportDeadlineNotification, ReportType } from '@/types/database';
+import { logAudit } from './audit';
 
 export interface ReportDeadlineWithDetails extends ReportDeadline {
   ministry_name?: string;
@@ -83,6 +84,23 @@ export async function createReportDeadline(
     .single();
 
   if (error) throw error;
+  
+  // Log audit
+  const { data: ministry } = await supabase
+    .from('ministries')
+    .select('name')
+    .eq('id', ministryId)
+    .single();
+    
+  await logAudit(
+    'create',
+    'report_deadlines',
+    `Created deadline "${title}" for ${ministry?.name || 'Unknown Ministry'} - Due: ${deadlineDate}`,
+    data.id,
+    createdBy,
+    undefined
+  );
+  
   return data as ReportDeadline;
 }
 
@@ -105,18 +123,45 @@ export async function updateReportDeadline(
  * Delete a report deadline (admin/secretary only, but also leaders can delete if completed)
  */
 export async function deleteReportDeadline(id: string): Promise<void> {
+  // Get deadline details for audit log
+  const { data: deadline } = await supabase
+    .from('report_deadlines')
+    .select('title, ministries(name)')
+    .eq('id', id)
+    .single();
+
   const { error } = await supabase
     .from('report_deadlines')
     .delete()
     .eq('id', id);
 
   if (error) throw error;
+  
+  // Log audit
+  const { data: { user } } = await supabase.auth.getUser();
+  if (deadline) {
+    await logAudit(
+      'delete',
+      'report_deadlines',
+      `Deleted deadline: "${deadline.title}" for ${(deadline as any).ministries?.name || 'Unknown Ministry'}`,
+      id,
+      user?.id,
+      undefined
+    );
+  }
 }
 
 /**
  * Mark a deadline as completed manually (for ministry leaders after submitting)
  */
 export async function markDeadlineAsCompleted(id: string): Promise<void> {
+  // Get deadline details for audit log
+  const { data: deadline } = await supabase
+    .from('report_deadlines')
+    .select('title, ministry_id, ministries(name)')
+    .eq('id', id)
+    .single();
+
   const { error } = await supabase
     .from('report_deadlines')
     .update({
@@ -127,6 +172,19 @@ export async function markDeadlineAsCompleted(id: string): Promise<void> {
     .eq('id', id);
 
   if (error) throw error;
+  
+  // Log audit
+  const { data: { user } } = await supabase.auth.getUser();
+  if (deadline) {
+    await logAudit(
+      'update',
+      'report_deadlines',
+      `Marked deadline as complete: "${deadline.title}" for ${(deadline as any).ministries?.name || 'Unknown Ministry'}`,
+      id,
+      user?.id,
+      undefined
+    );
+  }
 }
 
 /**

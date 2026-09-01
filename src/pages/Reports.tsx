@@ -15,7 +15,7 @@ import {
   BarChart3,
   ArrowUp,
   ArrowDown
-} from 'lucide-react';
+} from 'lucide-react';, Eye, CheckCircle, Clock, Heart
 import { 
   BarChart, 
   Bar, 
@@ -53,6 +53,10 @@ import {
   getRetentionMetrics,
   getComparisonData,
 } from '@/services/analytics';
+  getAnnouncementMetrics,
+  getDeadlineMetrics,
+  getFollowUpMetrics,
+import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { exportToCSV, exportToExcel, exportToPDF } from '@/utils/export';
 
 const COLORS = ['#0F2A5F', '#1E5EFF', '#D4A76A', '#64748B', '#22C55E', '#EF4444', '#8B5CF6', '#F59E0B'];
@@ -145,6 +149,28 @@ export function Reports() {
     queryKey: ['comparison', dateRange],
     queryFn: () => getComparisonData(startDate, endDate),
   });
+  // New feature metrics
+  const announcementMetricsQuery = useQuery({
+    queryKey: ['announcement-metrics', dateRange],
+    queryFn: () => getAnnouncementMetrics(startDate, endDate),
+  });
+
+  const deadlineMetricsQuery = useQuery({
+    queryKey: ['deadline-metrics', dateRange],
+    queryFn: () => getDeadlineMetrics(startDate, endDate),
+  });
+
+  const followUpMetricsQuery = useQuery({
+    queryKey: ['followup-metrics', dateRange],
+    queryFn: () => getFollowUpMetrics(startDate, endDate),
+  });
+
+  // Real-time subscriptions for dynamic data
+  useRealtimeQuery('ministry_budgets', ['financial-trends', dateRange]);
+  useRealtimeQuery('ministry_reports', ['ministry-metrics']);
+  useRealtimeQuery('announcements', ['announcement-metrics', dateRange]);
+  useRealtimeQuery('report_deadlines', ['deadline-metrics', dateRange]);
+  useRealtimeQuery('member_follow_ups', ['followup-metrics', dateRange]);
 
   const members = membersQuery.data ?? [];
   const membershipGrowth = membershipGrowthQuery.data ?? [];
@@ -157,6 +183,9 @@ export function Reports() {
   const engagement = engagementQuery.data;
   const retention = retentionQuery.data;
   const comparison = comparisonQuery.data;
+  const announcementMetrics = announcementMetricsQuery.data;
+  const deadlineMetrics = deadlineMetricsQuery.data;
+  const followUpMetrics = followUpMetricsQuery.data;
 
   const isLoading = membersQuery.isLoading || 
     membershipGrowthQuery.isLoading || 
@@ -233,6 +262,8 @@ export function Reports() {
 
       {/* Key Metrics with Comparison */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+      {/* First Row - Existing Metrics */}
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -317,7 +348,68 @@ export function Reports() {
         </Card>
       </div>
 
-      {/* Membership Growth Trends */}
+     
+      {/* Second Row - New Feature Metrics */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-slate-500">Announcement Views</p>
+            <p className="text-2xl font-bold text-ink">{announcementMetrics?.totalViews || 0}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {announcementMetrics?.totalAnnouncements || 0} announcements
+            </p>
+          </div>
+          <div className="p-3 bg-purple-50 rounded-lg">
+            <Eye className="h-6 w-6 text-purple-600" />
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-slate-500">Report Deadlines</p>
+            <p className="text-2xl font-bold text-ink">{deadlineMetrics?.completionRate || 0}%</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {deadlineMetrics?.completed || 0}/{deadlineMetrics?.total || 0} completed
+            </p>
+          </div>
+          <div className="p-3 bg-green-50 rounded-lg">
+            <CheckCircle className="h-6 w-6 text-green-600" />
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-slate-500">Follow-ups</p>
+            <p className="text-2xl font-bold text-ink">{followUpMetrics?.pending || 0}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {followUpMetrics?.completionRate || 0}% completion rate
+            </p>
+          </div>
+          <div className="p-3 bg-amber-50 rounded-lg">
+            <Heart className="h-6 w-6 text-amber-600" />
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-slate-500">Avg Follow-up Time</p>
+            <p className="text-2xl font-bold text-ink">{followUpMetrics?.avgDuration || 0}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              days to complete
+            </p>
+          </div>
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <Clock className="h-6 w-6 text-blue-600" />
+          </div>
+        </div>
+      </Card>
+ {/* Membership Growth Trends */}
       <Card>
         <CardHeader title="Membership Growth Trends" icon={TrendingUp} />
         <ResponsiveContainer width="100%" height={350}>
@@ -495,6 +587,93 @@ export function Reports() {
           </ResponsiveContainer>
         </Card>
       </div>
+      {/* New Feature Charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Announcement Engagement */}
+        <Card>
+          <CardHeader title="Announcement Engagement" icon={Eye} />
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={announcementMetrics?.viewsByMonth || []}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="views" 
+                stroke="#8B5CF6" 
+                strokeWidth={2} 
+                name="Total Views" 
+              />
+              <Line 
+                type="monotone" 
+                dataKey="announcements" 
+                stroke="#D4A76A" 
+                strokeWidth={2} 
+                name="Announcements Posted" 
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* Deadline Status */}
+        <Card>
+          <CardHeader title="Report Deadline Status" icon={Clock} />
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie 
+                data={[
+                  { name: 'Completed', value: deadlineMetrics?.completed || 0 },
+                  { name: 'Pending', value: deadlineMetrics?.pending || 0 },
+                  { name: 'Overdue', value: deadlineMetrics?.overdue || 0 },
+                ]} 
+                dataKey="value" 
+                nameKey="name" 
+                innerRadius={60} 
+                outerRadius={100} 
+                paddingAngle={2}
+                label
+              >
+                <Cell fill="#22C55E" />
+                <Cell fill="#F59E0B" />
+                <Cell fill="#EF4444" />
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* Follow-up Status */}
+        <Card>
+          <CardHeader title="Member Follow-ups Status" icon={Heart} />
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={followUpMetrics?.byStatus || []}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="status" tick={{ fontSize: 11 }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* Top Announcements */}
+        <Card>
+          <CardHeader title="Most Viewed Announcements" icon={Eye} />
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={announcementMetrics?.topAnnouncements || []} layout="vertical" margin={{ left: 100 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 11 }} />
+              <YAxis type="category" dataKey="title" width={90} tick={{ fontSize: 10 }} />
+              <Tooltip />
+              <Bar dataKey="views" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
 
       {/* Ministry Performance Metrics */}
       <Card>
