@@ -20,6 +20,7 @@ import {
   Video,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 import { cn } from '@/utils/cn';
 import type { UserRole } from '@/types/database';
 
@@ -55,6 +56,22 @@ const navItems: NavItem[] = [
 
 export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNavigate: () => void }) {
   const { profile } = useAuth();
+  const { data: notificationCounts } = useNotificationCounts();
+
+  const getNotificationCount = (path: string): number => {
+    if (!notificationCounts) return 0;
+    
+    switch (path) {
+      case '/all-ministry-reports':
+        return notificationCounts.ministryReports;
+      case '/all-member-followups':
+        return notificationCounts.memberFollowUps;
+      case '/announcements':
+        return notificationCounts.announcements;
+      default:
+        return 0;
+    }
+  };
 
   return (
     <aside
@@ -74,23 +91,31 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
         <div className="flex flex-col gap-1">
           {navItems
             .filter((item) => !item.roles || (profile && item.roles.includes(profile.role)))
-            .map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                    isActive ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
-                  )
-                }
-              >
-                <item.icon className="h-4.5 w-4.5 shrink-0" />
-                {item.label}
-              </NavLink>
-            ))}
+            .map((item) => {
+              const count = getNotificationCount(item.to);
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  onClick={onNavigate}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors relative',
+                      isActive ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
+                    )
+                  }
+                >
+                  <item.icon className="h-4.5 w-4.5 shrink-0" />
+                  {item.label}
+                  {count > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                      {count}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
         </div>
       </nav>
     </aside>

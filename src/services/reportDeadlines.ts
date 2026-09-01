@@ -102,12 +102,28 @@ export async function updateReportDeadline(
 }
 
 /**
- * Delete a report deadline
+ * Delete a report deadline (admin/secretary only, but also leaders can delete if completed)
  */
 export async function deleteReportDeadline(id: string): Promise<void> {
   const { error } = await supabase
     .from('report_deadlines')
     .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+/**
+ * Mark a deadline as completed manually (for ministry leaders after submitting)
+ */
+export async function markDeadlineAsCompleted(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('report_deadlines')
+    .update({
+      is_completed: true,
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', id);
 
   if (error) throw error;

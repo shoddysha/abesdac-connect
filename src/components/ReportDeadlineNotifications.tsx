@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Clock, CheckCircle, X, Calendar } from 'lucide-react';
+import { AlertCircle, Clock, CheckCircle, X, Calendar, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -9,7 +9,8 @@ import {
   markNotificationAsRead,
   dismissNotification,
   getUpcomingDeadlines,
-  getOverdueDeadlines 
+  getOverdueDeadlines,
+  markDeadlineAsCompleted
 } from '@/services/reportDeadlines';
 import { useAuth } from '@/contexts/AuthContext';
 import { format, formatDistanceToNow, isPast, differenceInDays } from 'date-fns';
@@ -57,6 +58,19 @@ export function ReportDeadlineNotifications({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deadline-notifications'] });
       toast.success('Notification dismissed');
+    },
+  });
+
+  const markCompleteMutation = useMutation({
+    mutationFn: markDeadlineAsCompleted,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deadline-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['upcoming-deadlines'] });
+      queryClient.invalidateQueries({ queryKey: ['overdue-deadlines'] });
+      toast.success('Deadline marked as complete');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
     },
   });
 
@@ -155,9 +169,24 @@ export function ReportDeadlineNotifications({
                   </div>
                 </div>
                 {onNavigateToSubmit && (
-                  <Button size="sm" onClick={onNavigateToSubmit} className="mt-3 w-full">
-                    Submit Report Now
-                  </Button>
+                  <div className="flex gap-2 mt-3 w-full">
+                    <Button size="sm" onClick={onNavigateToSubmit} className="flex-1">
+                      Submit Report Now
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        if (confirm('Mark this deadline as complete? This will remove it from your notifications.')) {
+                          markCompleteMutation.mutate(deadline.id);
+                        }
+                      }}
+                      title="Mark as complete"
+                      className="text-red-600 hover:text-red-700 hover:border-red-300"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 )}
               </Card>
             );
@@ -218,9 +247,24 @@ export function ReportDeadlineNotifications({
                   </div>
                 </div>
                 {onNavigateToSubmit && (
-                  <Button size="sm" variant="outline" onClick={onNavigateToSubmit} className="mt-3 w-full">
-                    Submit Report
-                  </Button>
+                  <div className="flex gap-2 mt-3 w-full">
+                    <Button size="sm" variant="outline" onClick={onNavigateToSubmit} className="flex-1">
+                      Submit Report
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        if (confirm('Mark this deadline as complete? This will remove it from your notifications.')) {
+                          markCompleteMutation.mutate(deadline.id);
+                        }
+                      }}
+                      title="Mark as complete"
+                      className="text-red-600 hover:text-red-700 hover:border-red-300"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 )}
               </Card>
             );

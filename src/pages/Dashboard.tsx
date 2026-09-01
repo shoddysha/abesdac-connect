@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { DeadlineNotificationsButton } from '@/components/DeadlineNotificationsButton';
 import { DeadlineNotificationsModal } from '@/components/DeadlineNotificationsModal';
+import { NotificationsButton } from '@/components/NotificationsButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchMemberStats } from '@/services/members';
 import { fetchEvents } from '@/services/events';
@@ -128,9 +129,12 @@ export function Dashboard() {
           </h1>
           <p className="text-sm text-slate-500">Here's what's happening at Abeka SDA Church today.</p>
         </div>
-        {hasRole('ministry_leader') && (
-          <DeadlineNotificationsButton onClick={() => setDeadlineModalOpen(true)} />
-        )}
+        <div className="flex gap-2">
+          <NotificationsButton />
+          {hasRole('ministry_leader') && (
+            <DeadlineNotificationsButton onClick={() => setDeadlineModalOpen(true)} />
+          )}
+        </div>
       </div>
 
       {/* Key Stats */}
@@ -156,7 +160,7 @@ export function Dashboard() {
       )}
 
       {/* Alerts & Notifications Row */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Visitors needing follow-up */}
         {unfollowedVisitors.length > 0 && (
           <Card className="border-l-4 border-l-amber-500">
@@ -175,26 +179,6 @@ export function Dashboard() {
               </div>
             </div>
           </Card>
-        )}
-
-        {/* Pending ministry reports (admin/secretary only) */}
-        {hasRole('administrator', 'secretary') && pendingReports.length > 0 && (
-          <Link to="/all-ministry-reports">
-            <Card className="border-l-4 border-l-blue-500 hover:shadow-md transition-shadow cursor-pointer">
-              <div className="flex items-start gap-3">
-                <Clock className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-ink">Reports Pending Review</h3>
-                  <p className="text-xs text-slate-600 mt-1">
-                    {pendingReports.length} ministry report{pendingReports.length !== 1 ? 's' : ''} awaiting acknowledgement
-                  </p>
-                  <Button size="sm" variant="outline" className="mt-2">
-                    Review Reports
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          </Link>
         )}
 
         {/* Upcoming birthdays this week */}
