@@ -124,7 +124,7 @@ export function NotificationsButton() {
                           <div key={announcement.id} className="flex items-start justify-between gap-2 p-2 bg-slate-50 rounded">
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-ink truncate">{announcement.title}</p>
-                              <p className="text-xs text-slate-500 truncate">{announcement.content.substring(0, 60)}...</p>
+                              <p className="text-xs text-slate-500 truncate">{announcement.body.substring(0, 60)}...</p>
                             </div>
                             <Button
                               size="sm"
