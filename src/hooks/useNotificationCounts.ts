@@ -79,10 +79,18 @@ export function useNotificationCounts() {
         .is('acknowledged_at', null);
 
       // Count pending follow-ups
-      const { count: followUpsCount } = await supabase
-        .from('member_follow_ups')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
+      // TEMPORARILY DISABLED until table is created
+      let followUpsCount = 0;
+      try {
+        const { count } = await supabase
+          .from('member_follow_ups')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending');
+        followUpsCount = count || 0;
+      } catch (error) {
+        console.warn('member_follow_ups table not found - using 0');
+        followUpsCount = 0;
+      }
 
       // Count pending budgets
       const { count: budgetsCount } = await supabase
@@ -101,7 +109,8 @@ export function useNotificationCounts() {
   });
 
   // Set up real-time subscriptions to auto-refresh counts when data changes
-  // Use a stable query key that doesn't include undefined
+  // TEMPORARILY DISABLED - uncomment when issue is resolved
+  /*
   const stableQueryKey = ['notification-counts', profile?.id || 'unauthenticated'];
   
   useRealtimeQuery('announcements', stableQueryKey);
@@ -110,6 +119,7 @@ export function useNotificationCounts() {
   useRealtimeQuery('ministry_reports', stableQueryKey);
   useRealtimeQuery('member_follow_ups', stableQueryKey);
   useRealtimeQuery('ministry_budgets', stableQueryKey);
+  */
 
   return query;
 }

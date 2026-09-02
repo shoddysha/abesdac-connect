@@ -635,13 +635,15 @@ export async function getDeadlineMetrics(startDate: Date, endDate: Date) {
  * Get member follow-up metrics
  */
 export async function getFollowUpMetrics(startDate: Date, endDate: Date) {
-  const { data: followUps, error } = await supabase
-    .from('member_follow_ups')
-    .select('id, status, reason, created_at, completed_at')
-    .gte('created_at', startDate.toISOString())
-    .lte('created_at', endDate.toISOString());
+  // TEMPORARILY HANDLE MISSING TABLE
+  try {
+    const { data: followUps, error } = await supabase
+      .from('member_follow_ups')
+      .select('id, status, reason, created_at, completed_at')
+      .gte('created_at', startDate.toISOString())
+      .lte('created_at', endDate.toISOString());
 
-  if (error) throw error;
+    if (error) throw error;
 
   // Status breakdown
   const statusCounts: Record<string, number> = {
@@ -697,4 +699,18 @@ export async function getFollowUpMetrics(startDate: Date, endDate: Date) {
     byStatus,
     byReason,
   };
+  } catch (error) {
+    // Table doesn't exist yet - return empty data
+    console.warn('member_follow_ups table not found - returning empty metrics');
+    return {
+      total: 0,
+      pending: 0,
+      completed: 0,
+      cancelled: 0,
+      completionRate: 0,
+      avgDuration: 0,
+      byStatus: [],
+      byReason: [],
+    };
+  }
 }
