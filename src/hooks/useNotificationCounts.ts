@@ -19,7 +19,7 @@ export function useNotificationCounts() {
   const isMinistryLeader = hasRole('ministry_leader');
 
   const query = useQuery({
-    queryKey: ['notification-counts', profile?.id],
+    queryKey: ['notification-counts', profile?.id || 'unauthenticated'],
     queryFn: async (): Promise<NotificationCounts> => {
       // Count UNVIEWED announcements (available to all roles)
       const announcements = await getUnviewedAnnouncementCount();
@@ -101,13 +101,15 @@ export function useNotificationCounts() {
   });
 
   // Set up real-time subscriptions to auto-refresh counts when data changes
-  // Pass profile?.id even if undefined - the hook will handle it
-  useRealtimeQuery('announcements', ['notification-counts', profile?.id || 'none']);
-  useRealtimeQuery('announcement_views', ['notification-counts', profile?.id || 'none']);
-  useRealtimeQuery('report_deadlines', ['notification-counts', profile?.id || 'none']);
-  useRealtimeQuery('ministry_reports', ['notification-counts', profile?.id || 'none']);
-  useRealtimeQuery('member_follow_ups', ['notification-counts', profile?.id || 'none']);
-  useRealtimeQuery('ministry_budgets', ['notification-counts', profile?.id || 'none']);
+  // Use a stable query key that doesn't include undefined
+  const stableQueryKey = ['notification-counts', profile?.id || 'unauthenticated'];
+  
+  useRealtimeQuery('announcements', stableQueryKey);
+  useRealtimeQuery('announcement_views', stableQueryKey);
+  useRealtimeQuery('report_deadlines', stableQueryKey);
+  useRealtimeQuery('ministry_reports', stableQueryKey);
+  useRealtimeQuery('member_follow_ups', stableQueryKey);
+  useRealtimeQuery('ministry_budgets', stableQueryKey);
 
   return query;
 }
