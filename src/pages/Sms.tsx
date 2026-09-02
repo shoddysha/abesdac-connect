@@ -93,11 +93,14 @@ export function Sms() {
   });
 
   // SMS Balance Query
-  const { data: smsBalance, isLoading: balanceLoading } = useQuery({
+  const { data: smsBalance, isLoading: balanceLoading, error: balanceError } = useQuery({
     queryKey: ['sms-balance'],
     queryFn: checkSmsBalance,
     refetchInterval: 60000, // Refetch every minute
     retry: 1, // Don't retry too much if API fails
+    onError: (error: Error) => {
+      console.error('Failed to fetch SMS balance:', error);
+    },
   });
 
   // Notification Workflows Query
@@ -396,7 +399,14 @@ export function Sms() {
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-slate-400">Unavailable</p>
+              <div>
+                <p className="text-sm text-slate-400">Unavailable</p>
+                {balanceError && (
+                  <p className="text-xs text-red-500 mt-1">
+                    {(balanceError as Error).message || 'Failed to load'}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>

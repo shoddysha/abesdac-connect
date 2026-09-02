@@ -354,65 +354,67 @@ export function Reports() {
 
      
       {/* Second Row - New Feature Metrics */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-slate-500">Announcement Views</p>
-            <p className="text-2xl font-bold text-ink">{announcementMetrics?.totalViews || 0}</p>
-            <p className="text-xs text-slate-500 mt-1">
-              {announcementMetrics?.totalAnnouncements || 0} announcements
-            </p>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-500">Announcement Views</p>
+              <p className="text-2xl font-bold text-ink">{announcementMetrics?.totalViews || 0}</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {announcementMetrics?.totalAnnouncements || 0} announcements
+              </p>
+            </div>
+            <div className="p-3 bg-purple-50 rounded-lg">
+              <Eye className="h-6 w-6 text-purple-600" />
+            </div>
           </div>
-          <div className="p-3 bg-purple-50 rounded-lg">
-            <Eye className="h-6 w-6 text-purple-600" />
-          </div>
-        </div>
-      </Card>
+        </Card>
 
-      <Card className="p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-slate-500">Report Deadlines</p>
-            <p className="text-2xl font-bold text-ink">{deadlineMetrics?.completionRate || 0}%</p>
-            <p className="text-xs text-slate-500 mt-1">
-              {deadlineMetrics?.completed || 0}/{deadlineMetrics?.total || 0} completed
-            </p>
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-500">Report Deadlines</p>
+              <p className="text-2xl font-bold text-ink">{deadlineMetrics?.completionRate || 0}%</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {deadlineMetrics?.completed || 0}/{deadlineMetrics?.total || 0} completed
+              </p>
+            </div>
+            <div className="p-3 bg-green-50 rounded-lg">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+            </div>
           </div>
-          <div className="p-3 bg-green-50 rounded-lg">
-            <CheckCircle className="h-6 w-6 text-green-600" />
-          </div>
-        </div>
-      </Card>
+        </Card>
 
-      <Card className="p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-slate-500">Follow-ups</p>
-            <p className="text-2xl font-bold text-ink">{followUpMetrics?.pending || 0}</p>
-            <p className="text-xs text-slate-500 mt-1">
-              {followUpMetrics?.completionRate || 0}% completion rate
-            </p>
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-500">Follow-ups</p>
+              <p className="text-2xl font-bold text-ink">{followUpMetrics?.pending || 0}</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {followUpMetrics?.completionRate || 0}% completion rate
+              </p>
+            </div>
+            <div className="p-3 bg-amber-50 rounded-lg">
+              <Heart className="h-6 w-6 text-amber-600" />
+            </div>
           </div>
-          <div className="p-3 bg-amber-50 rounded-lg">
-            <Heart className="h-6 w-6 text-amber-600" />
-          </div>
-        </div>
-      </Card>
+        </Card>
 
-      <Card className="p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-slate-500">Avg Follow-up Time</p>
-            <p className="text-2xl font-bold text-ink">{followUpMetrics?.avgDuration || 0}</p>
-            <p className="text-xs text-slate-500 mt-1">
-              days to complete
-            </p>
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-500">Avg Follow-up Time</p>
+              <p className="text-2xl font-bold text-ink">{followUpMetrics?.avgDuration || 0}</p>
+              <p className="text-xs text-slate-500 mt-1">
+                days to complete
+              </p>
+            </div>
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <Clock className="h-6 w-6 text-blue-600" />
+            </div>
           </div>
-          <div className="p-3 bg-blue-50 rounded-lg">
-            <Clock className="h-6 w-6 text-blue-600" />
-          </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
  {/* Membership Growth Trends */}
       <Card>
         <CardHeader title="Membership Growth Trends" icon={TrendingUp} />
