@@ -101,12 +101,13 @@ export function useNotificationCounts() {
   });
 
   // Set up real-time subscriptions to auto-refresh counts when data changes
-  useRealtimeQuery('announcements', ['notification-counts', profile?.id]);
-  useRealtimeQuery('announcement_views', ['notification-counts', profile?.id]);
-  useRealtimeQuery('report_deadlines', ['notification-counts', profile?.id]);
-  useRealtimeQuery('ministry_reports', ['notification-counts', profile?.id]);
-  useRealtimeQuery('member_follow_ups', ['notification-counts', profile?.id]);
-  useRealtimeQuery('ministry_budgets', ['notification-counts', profile?.id]);
+  // Pass profile?.id even if undefined - the hook will handle it
+  useRealtimeQuery('announcements', ['notification-counts', profile?.id || 'none']);
+  useRealtimeQuery('announcement_views', ['notification-counts', profile?.id || 'none']);
+  useRealtimeQuery('report_deadlines', ['notification-counts', profile?.id || 'none']);
+  useRealtimeQuery('ministry_reports', ['notification-counts', profile?.id || 'none']);
+  useRealtimeQuery('member_follow_ups', ['notification-counts', profile?.id || 'none']);
+  useRealtimeQuery('ministry_budgets', ['notification-counts', profile?.id || 'none']);
 
   return query;
 }
