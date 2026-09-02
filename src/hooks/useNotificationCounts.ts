@@ -20,6 +20,7 @@ export function useNotificationCounts() {
 
   const query = useQuery({
     queryKey: ['notification-counts', profile?.id || 'unauthenticated'],
+    refetchInterval: 10000, // Poll every 10 seconds for new notifications
     queryFn: async (): Promise<NotificationCounts> => {
       // Count UNVIEWED announcements (available to all roles)
       const announcements = await getUnviewedAnnouncementCount();
@@ -109,6 +110,8 @@ export function useNotificationCounts() {
   });
 
   // Set up real-time subscriptions to auto-refresh counts when data changes
+  // DISABLED - causes white screen error
+  /*
   const stableQueryKey = ['notification-counts', profile?.id || 'unauthenticated'];
   
   useRealtimeQuery('announcements', stableQueryKey);
@@ -117,6 +120,7 @@ export function useNotificationCounts() {
   useRealtimeQuery('ministry_reports', stableQueryKey);
   useRealtimeQuery('member_follow_ups', stableQueryKey);
   useRealtimeQuery('ministry_budgets', stableQueryKey);
+  */
 
   return query;
 }

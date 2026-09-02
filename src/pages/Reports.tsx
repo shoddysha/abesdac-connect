@@ -170,11 +170,14 @@ export function Reports() {
   });
 
   // Real-time subscriptions for dynamic data
+  // DISABLED - causes white screen error
+  /*
   useRealtimeQuery('ministry_budgets', ['financial-trends', dateRange]);
   useRealtimeQuery('ministry_reports', ['ministry-metrics']);
   useRealtimeQuery('announcements', ['announcement-metrics', dateRange]);
   useRealtimeQuery('report_deadlines', ['deadline-metrics', dateRange]);
   useRealtimeQuery('member_follow_ups', ['followup-metrics', dateRange]);
+  */
 
   const members = membersQuery.data ?? [];
   const membershipGrowth = membershipGrowthQuery.data ?? [];
