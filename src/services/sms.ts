@@ -43,38 +43,6 @@ export function normalizePhoneNumber(phone: string): string | null {
 }
 
 /**
- * Check SMS balance via Supabase Edge Function (which calls Arkesel API)
- */
-export async function checkSmsBalance(): Promise<{
-  balance: number;
-  user: string;
-  country: string;
-}> {
-  // Get current user's session
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
-
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-sms-balance`,
-    {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
-
-  const result = await response.json();
-
-  if (!result.success) {
-    throw new Error(result.error || 'Failed to fetch balance');
-  }
-
-  return result.data;
-}
-
-/**
  * Send SMS via Supabase Edge Function (which calls Arkesel API)
  * This keeps the API key secure and hidden from the browser
  */

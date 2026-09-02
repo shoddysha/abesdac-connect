@@ -22,8 +22,6 @@ import {
   XCircle,
   TrendingUp,
   Trash2,
-  Wallet,
-  CreditCard,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -33,7 +31,7 @@ import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchMinistries } from '@/services/ministries';
 import { fetchMembers } from '@/services/members';
-import { sendBulkSms, fetchSmsLogs, checkSmsBalance } from '@/services/sms';
+import { sendBulkSms, fetchSmsLogs } from '@/services/sms';
 import { SmsLogsViewer } from '@/features/sms/SmsLogsViewer';
 import { RecurringServiceReminders } from '@/features/sms/RecurringServiceReminders';
 import {
@@ -90,22 +88,6 @@ export function Sms() {
   const { data: smsLogs = [], isLoading: logsLoading } = useQuery({
     queryKey: ['sms-logs'],
     queryFn: () => fetchSmsLogs(),
-  });
-
-  // SMS Balance Query
-  const { data: smsBalance, isLoading: balanceLoading, error: balanceError } = useQuery({
-    queryKey: ['sms-balance'],
-    queryFn: async () => {
-      try {
-        return await checkSmsBalance();
-      } catch (error) {
-        console.warn('Failed to fetch SMS balance (edge function not deployed):', error);
-        // Return null instead of throwing to prevent crash
-        return null;
-      }
-    },
-    refetchInterval: 60000, // Refetch every minute
-    retry: false, // Don't retry if it fails
   });
 
   // Notification Workflows Query
@@ -306,7 +288,6 @@ export function Sms() {
         reset();
         setSelectedMembers([]);
         queryClient.invalidateQueries({ queryKey: ['sms-logs'] });
-        queryClient.invalidateQueries({ queryKey: ['sms-balance'] }); // Refresh balance after sending
       } else {
         toast.error(result.message);
       }
@@ -372,49 +353,12 @@ export function Sms() {
 
   return (
     <div className="space-y-6">
-      {/* Header with Balance Card */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">SMS & Notifications</h1>
-          <p className="text-sm text-slate-500">
-            Send bulk SMS, manage automated notifications, and view message history.
-          </p>
-        </div>
-        
-        {/* Compact Balance Card */}
-        <div className="flex-shrink-0">
-          <div className="bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-200 rounded-lg px-4 py-3 min-w-[200px]">
-            <div className="flex items-center gap-2 mb-1">
-              <Wallet className="h-4 w-4 text-blue-600" />
-              <span className="text-xs font-medium text-slate-600">SMS Balance</span>
-            </div>
-            {balanceLoading ? (
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-16 bg-slate-200 animate-pulse rounded"></div>
-                <span className="text-xs text-slate-400">Loading...</span>
-              </div>
-            ) : smsBalance ? (
-              <div>
-                <p className="text-2xl font-bold text-blue-600">
-                  {smsBalance.balance.toLocaleString()}
-                </p>
-                <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                  <CreditCard className="h-3 w-3" />
-                  {smsBalance.user}
-                </p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm text-slate-400">Unavailable</p>
-                {balanceError && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {(balanceError as Error).message || 'Failed to load'}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-ink">SMS & Notifications</h1>
+        <p className="text-sm text-slate-500">
+          Send bulk SMS, manage automated notifications, and view message history.
+        </p>
       </div>
 
       {/* Tab Navigation */}
