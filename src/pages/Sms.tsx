@@ -95,12 +95,16 @@ export function Sms() {
   // SMS Balance Query
   const { data: smsBalance, isLoading: balanceLoading, error: balanceError } = useQuery({
     queryKey: ['sms-balance'],
-    queryFn: checkSmsBalance,
+    queryFn: async () => {
+      try {
+        return await checkSmsBalance();
+      } catch (error) {
+        console.error('Failed to fetch SMS balance:', error);
+        throw error;
+      }
+    },
     refetchInterval: 60000, // Refetch every minute
     retry: 1, // Don't retry too much if API fails
-    onError: (error: Error) => {
-      console.error('Failed to fetch SMS balance:', error);
-    },
   });
 
   // Notification Workflows Query
