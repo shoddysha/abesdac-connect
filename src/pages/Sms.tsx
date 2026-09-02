@@ -178,17 +178,27 @@ export function Sms() {
       
       if (fetchError) throw fetchError;
       
+      console.log('Notifications to delete:', notifications);
+      
       if (!notifications || notifications.length === 0) {
         return 0;
       }
       
       // Delete all notification queue records using the IDs
+      const ids = notifications.map(n => n.id);
+      console.log('Deleting notification IDs:', ids);
+      
       const { error, count } = await supabase
         .from('notification_queue')
         .delete({ count: 'exact' })
-        .in('id', notifications.map(n => n.id));
+        .in('id', ids);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
+      
+      console.log('Delete result count:', count);
       return count;
     },
     onSuccess: (count) => {

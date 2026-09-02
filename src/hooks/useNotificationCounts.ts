@@ -109,8 +109,6 @@ export function useNotificationCounts() {
   });
 
   // Set up real-time subscriptions to auto-refresh counts when data changes
-  // TEMPORARILY DISABLED - uncomment when issue is resolved
-  /*
   const stableQueryKey = ['notification-counts', profile?.id || 'unauthenticated'];
   
   useRealtimeQuery('announcements', stableQueryKey);
@@ -119,7 +117,6 @@ export function useNotificationCounts() {
   useRealtimeQuery('ministry_reports', stableQueryKey);
   useRealtimeQuery('member_follow_ups', stableQueryKey);
   useRealtimeQuery('ministry_budgets', stableQueryKey);
-  */
 
   return query;
 }
