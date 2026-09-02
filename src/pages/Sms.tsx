@@ -99,12 +99,13 @@ export function Sms() {
       try {
         return await checkSmsBalance();
       } catch (error) {
-        console.error('Failed to fetch SMS balance:', error);
-        throw error;
+        console.warn('Failed to fetch SMS balance (edge function not deployed):', error);
+        // Return null instead of throwing to prevent crash
+        return null;
       }
     },
     refetchInterval: 60000, // Refetch every minute
-    retry: 1, // Don't retry too much if API fails
+    retry: false, // Don't retry if it fails
   });
 
   // Notification Workflows Query
