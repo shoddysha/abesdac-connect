@@ -22,7 +22,6 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { NotificationsButton } from '@/components/NotificationsButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchMemberStats } from '@/services/members';
 import { fetchEvents } from '@/services/events';
@@ -134,10 +133,14 @@ export function Dashboard() {
 
   useRealtimeQuery('members', ['member-stats']);
   useRealtimeQuery('members', ['upcoming-birthdays']);
+  useRealtimeQuery('members', ['dashboard-member-trend']);
+  useRealtimeQuery('members', ['dashboard-active-member-trend']);
   useRealtimeQuery('events', ['events']);
   useRealtimeQuery('audit_logs', ['audit-logs', 'recent']);
   useRealtimeQuery('visitors', ['unfollowed-visitors']);
   useRealtimeQuery('ministry_reports', ['dashboard-reports']);
+  useRealtimeQuery('attendance', ['dashboard-attendance-trend']);
+  useRealtimeQuery('ministries', ['dashboard-ministries']);
 
   const stats = statsQuery.data;
   const upcomingEvents = (eventsQuery.data ?? []).filter((e: any) => isFuture(new Date(e.start_time))).slice(0, 5);
@@ -167,9 +170,6 @@ export function Dashboard() {
             Welcome back, {profile?.full_name?.split(' ')[0] || 'User'}!
           </h1>
           <p className="text-sm text-slate-500">Here's what's happening at Abeka SDA Church today.</p>
-        </div>
-        <div className="flex gap-2">
-          <NotificationsButton />
         </div>
       </div>
 

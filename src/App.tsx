@@ -35,6 +35,7 @@ import { MyMinistryBudgets } from '@/pages/MyMinistryBudgets';
 import { NotificationSettings } from '@/pages/NotificationSettings';
 import { NotificationHistory } from '@/pages/NotificationHistory';
 import { Resources } from '@/pages/Resources';
+import { HelpSupport } from '@/pages/HelpSupport';
 
 export function App() {
   return (
@@ -201,6 +202,7 @@ export function App() {
               }
             />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/help-support" element={<HelpSupport />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />

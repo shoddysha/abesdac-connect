@@ -14,6 +14,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Badge, statusTone } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { fetchEvents, createEvent, updateEvent, deleteEvent } from '@/services/events';
+import { fetchMinistries } from '@/services/ministries';
 import { scheduleEventReminder } from '@/services/sms';
 import { SendSmsModal } from '@/features/sms/SendSmsModal';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
@@ -29,6 +30,7 @@ const schema = z.object({
   start_time: z.string().min(1, 'Required'),
   end_time: z.string().optional(),
   status: z.enum(['upcoming', 'ongoing', 'completed', 'cancelled']),
+  organized_by_ministry_id: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -49,6 +51,7 @@ export function Events() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const eventsQuery = useQuery({ queryKey: ['events'], queryFn: fetchEvents });
+  const ministriesQuery = useQuery({ queryKey: ['ministries'], queryFn: fetchMinistries });
   useRealtimeQuery('events', ['events']);
 
   // Fetch creator names for events
@@ -124,7 +127,7 @@ export function Events() {
   }, [events, selectedDay, month]);
 
   function openCreate() {
-    reset({ title: '', description: '', location: '', start_time: '', end_time: '', status: 'upcoming' });
+    reset({ title: '', description: '', location: '', start_time: '', end_time: '', status: 'upcoming', organized_by_ministry_id: '' });
     setEditingId(null);
     setFormOpen(true);
   }
@@ -139,6 +142,7 @@ export function Events() {
       start_time: e.start_time.slice(0, 16),
       end_time: e.end_time?.slice(0, 16) ?? '',
       status: e.status,
+      organized_by_ministry_id: e.organized_by_ministry_id ?? '',
     });
     setEditingId(id);
     setFormOpen(true);
@@ -270,6 +274,8 @@ export function Events() {
               {filteredEvents.map((event) => {
                 const eventDate = new Date(event.start_time);
                 const creatorName = event.created_by ? creatorMap.get(event.created_by) : null;
+                const organizingMinistry = event.organized_by_ministry_id ? 
+                  ministriesQuery.data?.find(m => m.id === event.organized_by_ministry_id) : null;
                 
                 return (
                   <Card key={event.id} className="hover:shadow-md transition-shadow">
@@ -310,6 +316,14 @@ export function Events() {
                             <div className="flex items-center gap-1.5">
                               <User className="h-3.5 w-3.5 flex-shrink-0" />
                               <span className="truncate">{creatorName}</span>
+                            </div>
+                          )}
+                          {organizingMinistry && (
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-3.5 w-3.5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                <div className="h-1.5 w-1.5 rounded-full bg-blue-600"></div>
+                              </div>
+                              <span className="truncate text-blue-600">{organizingMinistry.name}</span>
                             </div>
                           )}
                         </div>
@@ -461,6 +475,18 @@ export function Events() {
               { value: 'cancelled', label: 'Cancelled' },
             ]}
             {...register('status')}
+          />
+
+          <Select
+            label="Organized by (Ministry)"
+            placeholder="Select organizing ministry"
+            options={[
+              { value: '', label: 'No ministry (Individual event)' },
+              ...(ministriesQuery.data ?? [])
+                .filter(m => m.is_active)
+                .map(m => ({ value: m.id, label: m.name }))
+            ]}
+            {...register('organized_by_ministry_id')}
           />
           
           {/* Schedule SMS Reminder Checkbox */}

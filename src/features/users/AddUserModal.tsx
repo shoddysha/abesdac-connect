@@ -46,41 +46,39 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
 
   async function onSubmit(values: AddUserFormValues) {
     try {
-      // Step 1: Create auth user via Supabase Admin API
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: values.email,
-        password: values.password,
-        email_confirm: true, // Auto-confirm email
+      // Call the database function to create user with auth
+      const { data, error } = await supabase.rpc('create_new_user', {
+        p_email: values.email,
+        p_password: values.password,
+        p_full_name: values.full_name,
+        p_phone: values.phone || null,
+        p_role: values.role,
       });
 
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Failed to create user');
+      if (error) {
+        throw error;
+      }
 
-      // Step 2: Update the auto-created profile with additional details
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          full_name: values.full_name,
-          phone: values.phone || null,
-          role: values.role,
-          is_active: true,
-        })
-        .eq('id', authData.user.id);
+      // Check the response from the function
+      if (data && typeof data === 'object' && 'success' in data) {
+        if (!data.success) {
+          throw new Error(data.message || 'Failed to create user');
+        }
+      }
 
-      if (profileError) throw profileError;
-
-      toast.success(`User ${values.full_name} created successfully!`);
+      toast.success(`User ${values.full_name} created successfully! They can log in immediately.`);
       form.reset();
       onSuccess();
       onClose();
     } catch (err: any) {
-      // Handle specific error cases
-      if (err.message?.includes('already registered')) {
+      console.error('Error creating user:', err);
+      
+      if (err.message?.includes('already exists') || err.message?.includes('duplicate') || err.message?.includes('unique')) {
         toast.error('This email is already registered');
-      } else if (err.message?.includes('admin api')) {
-        toast.error('Admin privileges required. Please use Supabase Studio to create users.');
+      } else if (err.message?.includes('function create_new_user') || err.message?.includes('does not exist')) {
+        toast.error('Database function not found. Please run the migration: supabase/migrations/20260901_create_user_function.sql');
       } else {
-        toast.error(err.message || 'Failed to create user');
+        toast.error(err.message || 'Failed to create user. Please try again.');
       }
     }
   }
@@ -122,7 +120,6 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
             placeholder="Minimum 6 characters"
             {...form.register('password')}
             error={form.formState.errors.password?.message}
-            hint="User can change this after first login"
           />
 
           <Input
@@ -155,8 +152,8 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
           {/* Note */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-xs text-blue-700">
-              <strong>Note:</strong> The user will be able to sign in immediately with the provided email and password.
-              They can update their profile and change their password after logging in.
+              <strong>Note:</strong> The user will be created with full authentication and can log in immediately 
+              with the provided email and password. They can change their password after logging in.
             </p>
           </div>
 
