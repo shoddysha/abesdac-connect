@@ -94,7 +94,7 @@ export function NotificationsButton() {
           id: `announcement-${announcement.id}`,
           type: 'announcement',
           title: announcement.title,
-          message: announcement.content.substring(0, 150) + (announcement.content.length > 150 ? '...' : ''),
+          message: announcement.body.substring(0, 150) + (announcement.body.length > 150 ? '...' : ''),
           timestamp: announcement.published_at,
           isRead: false,
           icon: Megaphone,

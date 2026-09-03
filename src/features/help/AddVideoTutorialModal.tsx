@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Video, Link as LinkIcon, Upload } from 'lucide-react';
+import { X, Video, Upload } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Input, Textarea, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -138,7 +138,6 @@ export function AddVideoTutorialModal({
             setFormData({ ...formData, video_url: e.target.value })
           }
           required
-          icon={LinkIcon}
         />
 
         {/* Video Preview */}
