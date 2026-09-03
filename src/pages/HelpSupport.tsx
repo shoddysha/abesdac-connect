@@ -1,114 +1,126 @@
-import { useState } from 'react';
-import { HelpCircle, Book, MessageSquare, Mail, Phone, FileText, Video, ChevronDown, ChevronRight, Send } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { HelpCircle, Book, MessageSquare, Mail, Phone, FileText, Video, ChevronDown, ChevronRight, Send, ExternalLink, Calendar, CheckCircle } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input, Textarea } from '@/components/ui/Input';
+import { Input, Textarea, Select } from '@/components/ui/Input';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
+import {
+  fetchReleaseNotes,
+  fetchLatestRelease,
+  fetchDocumentation,
+  fetchDocumentationCategories,
+  fetchVideoTutorials,
+  fetchFAQs,
+  fetchFAQCategories,
+  createSupportTicket,
+  fetchMyTickets,
+  incrementFAQView,
+  incrementVideoView,
+} from '@/services/help';
 import toast from 'react-hot-toast';
-
-const faqs = [
-  {
-    category: 'Getting Started',
-    questions: [
-      {
-        question: 'How do I add new members to the system?',
-        answer: 'Navigate to the Members page and click the "Add Member" button. Fill in the required information including name, contact details, and ministry assignment. You can also import multiple members using the Excel/CSV import feature.'
-      },
-      {
-        question: 'How do I assign members to ministries?',
-        answer: 'Go to the Ministries page, select a ministry, and click "Members". From there, you can add or remove members from the ministry.'
-      },
-      {
-        question: 'How can I reset my password?',
-        answer: 'Click on your profile icon in the top right corner, select "Change Password", and follow the instructions to update your password.'
-      }
-    ]
-  },
-  {
-    category: 'Member Management',
-    questions: [
-      {
-        question: 'How do I track member attendance?',
-        answer: 'Use the Attendance page to record service attendance. You can mark attendance manually or use the QR code check-in feature for faster processing.'
-      },
-      {
-        question: 'Can I archive members instead of deleting them?',
-        answer: 'Yes! Use the Archive option to hide members from active lists while preserving their records. Archived members can be restored at any time.'
-      },
-      {
-        question: 'How do I export member data?',
-        answer: 'On the Members page, click the "CSV" or "Excel" export buttons to download member data. You can filter members before exporting to get specific data sets.'
-      }
-    ]
-  },
-  {
-    category: 'Events & Communication',
-    questions: [
-      {
-        question: 'How do I create and schedule events?',
-        answer: 'Go to the Events page and click "Create Event". Fill in the event details, date, time, and location. You can also schedule automatic SMS reminders 24 hours before the event.'
-      },
-      {
-        question: 'How do I send SMS to members?',
-        answer: 'Navigate to the SMS page to send messages to individuals, groups, or all members. You can also schedule messages for future delivery.'
-      },
-      {
-        question: 'Can I send targeted messages to specific ministries?',
-        answer: 'Yes! When sending SMS or announcements, you can filter recipients by ministry, status, or other criteria.'
-      }
-    ]
-  },
-  {
-    category: 'Reports & Analytics',
-    questions: [
-      {
-        question: 'How do I generate ministry reports?',
-        answer: 'Ministry leaders can submit reports from the Ministry Reports page. Administrators can view all reports from the All Ministry Reports page.'
-      },
-      {
-        question: 'Where can I view attendance statistics?',
-        answer: 'The Dashboard provides an overview of attendance trends. For detailed analytics, visit the Reports page to view charts and export data.'
-      },
-      {
-        question: 'How do I track member follow-ups?',
-        answer: 'Use the Member Follow-Up feature to record interactions with members. You can view all follow-ups and filter by date or member.'
-      }
-    ]
-  }
-];
-
-const resources = [
-  {
-    icon: Book,
-    title: 'User Guide',
-    description: 'Complete documentation on all features',
-    link: '#'
-  },
-  {
-    icon: Video,
-    title: 'Video Tutorials',
-    description: 'Step-by-step video walkthroughs',
-    link: '#'
-  },
-  {
-    icon: FileText,
-    title: 'Release Notes',
-    description: 'Latest updates and new features',
-    link: '#'
-  }
-];
+import { format } from 'date-fns';
 
 export function HelpSupport() {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'documentation' | 'videos' | 'faq' | 'releases'>('documentation');
   const [contactForm, setContactForm] = useState({
     subject: '',
-    message: ''
+    message: '',
+    priority: 'medium',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Queries
+  const releaseNotesQuery = useQuery({
+    queryKey: ['release-notes'],
+    queryFn: fetchReleaseNotes,
+  });
+
+  const latestReleaseQuery = useQuery({
+    queryKey: ['latest-release'],
+    queryFn: fetchLatestRelease,
+  });
+
+  const documentationQuery = useQuery({
+    queryKey: ['help-documentation', selectedCategory],
+    queryFn: () => selectedCategory === 'all' ? fetchDocumentation() : fetchDocumentation(selectedCategory),
+  });
+
+  const docCategoriesQuery = useQuery({
+    queryKey: ['doc-categories'],
+    queryFn: fetchDocumentationCategories,
+  });
+
+  const videosQuery = useQuery({
+    queryKey: ['video-tutorials'],
+    queryFn: fetchVideoTutorials,
+  });
+
+  const faqsQuery = useQuery({
+    queryKey: ['faqs', selectedCategory],
+    queryFn: () => selectedCategory === 'all' ? fetchFAQs() : fetchFAQs(selectedCategory),
+  });
+
+  const faqCategoriesQuery = useQuery({
+    queryKey: ['faq-categories'],
+    queryFn: fetchFAQCategories,
+  });
+
+  const myTicketsQuery = useQuery({
+    queryKey: ['my-support-tickets'],
+    queryFn: fetchMyTickets,
+  });
+
+  // Real-time updates
+  useRealtimeQuery('release_notes', ['release-notes', 'latest-release']);
+  useRealtimeQuery('help_documentation', ['help-documentation', selectedCategory]);
+  useRealtimeQuery('video_tutorials', ['video-tutorials']);
+  useRealtimeQuery('faqs', ['faqs', selectedCategory]);
+  useRealtimeQuery('support_tickets', ['my-support-tickets']);
+
+  const documentation = documentationQuery.data || [];
+  const docCategories = docCategoriesQuery.data || [];
+  const videos = videosQuery.data || [];
+  const faqs = faqsQuery.data || [];
+  const faqCategories = faqCategoriesQuery.data || [];
+  const releaseNotes = releaseNotesQuery.data || [];
+  const latestRelease = latestReleaseQuery.data;
+  const myTickets = myTicketsQuery.data || [];
+
+  // Group documentation by category
+  const groupedDocs = useMemo(() => {
+    const groups: Record<string, typeof documentation> = {};
+    documentation.forEach(doc => {
+      if (!groups[doc.category]) {
+        groups[doc.category] = [];
+      }
+      groups[doc.category].push(doc);
+    });
+    return groups;
+  }, [documentation]);
+
+  // Group FAQs by category
+  const groupedFaqs = useMemo(() => {
+    const groups: Record<string, typeof faqs> = {};
+    faqs.forEach(faq => {
+      if (!groups[faq.category]) {
+        groups[faq.category] = [];
+      }
+      groups[faq.category].push(faq);
+    });
+    return groups;
+  }, [faqs]);
+
   function toggleFaq(id: string) {
     setExpandedFaq(expandedFaq === id ? null : id);
+    if (expandedFaq !== id) {
+      incrementFAQView(id);
+    }
   }
 
   async function handleSubmitTicket(e: React.FormEvent) {
@@ -122,16 +134,19 @@ export function HelpSupport() {
     setIsSubmitting(true);
     
     try {
-      // Simulate API call - Replace with actual support ticket creation
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await createSupportTicket(contactForm);
       toast.success('Support ticket submitted successfully! We\'ll get back to you soon.');
-      setContactForm({ subject: '', message: '' });
+      setContactForm({ subject: '', message: '', priority: 'medium' });
+      queryClient.invalidateQueries({ queryKey: ['my-support-tickets'] });
     } catch (error) {
       toast.error('Failed to submit ticket. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleVideoClick(videoId: string) {
+    incrementVideoView(videoId);
   }
 
   return (
@@ -141,6 +156,31 @@ export function HelpSupport() {
         <h1 className="text-3xl font-bold text-slate-900">Help & Support</h1>
         <p className="text-sm text-slate-500 mt-1">Get help and find answers to common questions</p>
       </div>
+
+      {/* Latest Release Banner */}
+      {latestRelease && (
+        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 flex-shrink-0">
+              <Calendar className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-semibold text-slate-900">Latest Release: v{latestRelease.version}</h3>
+                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">NEW</span>
+              </div>
+              <p className="text-sm text-slate-600 mb-2">{latestRelease.title}</p>
+              <p className="text-xs text-slate-500">{latestRelease.description}</p>
+            </div>
+            <button
+              onClick={() => setActiveTab('releases')}
+              className="text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
+            >
+              View Details →
+            </button>
+          </div>
+        </Card>
+      )}
 
       {/* Quick Contact Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -181,34 +221,36 @@ export function HelpSupport() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 mb-3">
               <MessageSquare className="h-6 w-6 text-purple-600" />
             </div>
-            <h3 className="font-semibold text-slate-900 mb-1">Live Chat</h3>
-            <p className="text-sm text-slate-500 mb-3">Mon-Fri, 9am-5pm GMT</p>
-            <button className="text-sm text-purple-600 hover:text-purple-700 font-medium">
-              Start Chat
-            </button>
+            <h3 className="font-semibold text-slate-900 mb-1">My Tickets</h3>
+            <p className="text-sm text-slate-500 mb-3">{myTickets.filter(t => t.status === 'open').length} open tickets</p>
+            <a href="#tickets" className="text-sm text-purple-600 hover:text-purple-700 font-medium">
+              View Tickets
+            </a>
           </div>
         </Card>
       </div>
 
-      {/* Resources Section */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Resources</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {resources.map((resource, index) => (
-            <Card key={index} className="hover:shadow-md transition-shadow cursor-pointer">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 flex-shrink-0">
-                  <resource.icon className="h-5 w-5 text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-slate-900 mb-1">{resource.title}</h3>
-                  <p className="text-sm text-slate-500">{resource.description}</p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-slate-400 flex-shrink-0" />
-              </div>
-            </Card>
-          ))}
-        </div>
+      {/* Tab Navigation */}
+      <div className="flex gap-2 border-b border-slate-200 overflow-x-auto">
+        {[
+          { value: 'documentation', label: 'User Guide', icon: Book },
+          { value: 'videos', label: 'Video Tutorials', icon: Video },
+          { value: 'faq', label: 'FAQs', icon: HelpCircle },
+          { value: 'releases', label: 'Release Notes', icon: FileText },
+        ].map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => setActiveTab(tab.value as any)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === tab.value
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+            }`}
+          >
+            <tab.icon className="h-4 w-4" />
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* FAQ Section */}
