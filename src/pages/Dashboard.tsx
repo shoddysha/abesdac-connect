@@ -16,8 +16,8 @@ import {
   Clock,
   Building2,
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { StatCard } from '@/components/ui/StatCard';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area } from 'recharts';
+import { EnhancedStatCard } from '@/components/ui/EnhancedStatCard';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -78,6 +78,49 @@ export function Dashboard() {
     },
   });
 
+  // Get member growth trend (last 6 months)
+  const memberTrendQuery = useQuery({
+    queryKey: ['dashboard-member-trend'],
+    queryFn: async () => {
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const date = subMonths(new Date(), i);
+        const end = endOfMonth(date);
+        
+        const { count, error } = await supabase
+          .from('members')
+          .select('*', { count: 'exact', head: true })
+          .lte('created_at', end.toISOString());
+        
+        if (error) throw error;
+        months.push(count || 0);
+      }
+      return months;
+    },
+  });
+
+  // Get active members trend
+  const activeMemberTrendQuery = useQuery({
+    queryKey: ['dashboard-active-member-trend'],
+    queryFn: async () => {
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const date = subMonths(new Date(), i);
+        const end = endOfMonth(date);
+        
+        const { count, error } = await supabase
+          .from('members')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .lte('created_at', end.toISOString());
+        
+        if (error) throw error;
+        months.push(count || 0);
+      }
+      return months;
+    },
+  });
+
   const ministriesQuery = useQuery({
     queryKey: ['dashboard-ministries'],
     queryFn: async () => {
@@ -131,23 +174,73 @@ export function Dashboard() {
       </div>
 
       {/* Key Stats */}
-      {statsQuery.isLoading ? (
+      {statsQuery.isLoading || memberTrendQuery.isLoading ? (
         <Spinner />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Total Members" value={stats?.total ?? 0} icon={Users} tone="primary" />
-          <StatCard label="Active Members" value={stats?.active ?? 0} icon={UserCheck} tone="secondary" />
-          <StatCard 
-            label="Active Ministries" 
-            value={ministries.filter((m: any) => m.is_active).length} 
-            icon={Building2} 
-            tone="accent" 
+          <EnhancedStatCard
+            label="Total Members"
+            value={stats?.total ?? 0}
+            icon={Users}
+            tone="blue"
+            sparklineData={memberTrendQuery.data}
+            trend={
+              memberTrendQuery.data && memberTrendQuery.data.length >= 2
+                ? {
+                    value: Number(
+                      (
+                        ((memberTrendQuery.data[memberTrendQuery.data.length - 1] -
+                          memberTrendQuery.data[memberTrendQuery.data.length - 2]) /
+                          (memberTrendQuery.data[memberTrendQuery.data.length - 2] || 1)) *
+                        100
+                      ).toFixed(1)
+                    ),
+                    isPositive:
+                      memberTrendQuery.data[memberTrendQuery.data.length - 1] >=
+                      memberTrendQuery.data[memberTrendQuery.data.length - 2],
+                  }
+                : undefined
+            }
+            subtitle="All registered"
           />
-          <StatCard 
-            label="Upcoming Events" 
-            value={upcomingEvents.length} 
-            icon={CalendarDays} 
-            tone="primary" 
+          <EnhancedStatCard
+            label="Active Members"
+            value={stats?.active ?? 0}
+            icon={UserCheck}
+            tone="green"
+            sparklineData={activeMemberTrendQuery.data}
+            trend={
+              activeMemberTrendQuery.data && activeMemberTrendQuery.data.length >= 2
+                ? {
+                    value: Number(
+                      (
+                        ((activeMemberTrendQuery.data[activeMemberTrendQuery.data.length - 1] -
+                          activeMemberTrendQuery.data[activeMemberTrendQuery.data.length - 2]) /
+                          (activeMemberTrendQuery.data[activeMemberTrendQuery.data.length - 2] || 1)) *
+                        100
+                      ).toFixed(1)
+                    ),
+                    isPositive:
+                      activeMemberTrendQuery.data[activeMemberTrendQuery.data.length - 1] >=
+                      activeMemberTrendQuery.data[activeMemberTrendQuery.data.length - 2],
+                  }
+                : undefined
+            }
+            subtitle="Currently active"
+          />
+          <EnhancedStatCard
+            label="Active Ministries"
+            value={ministries.filter((m: any) => m.is_active).length}
+            icon={Building2}
+            tone="purple"
+            subtitle={`${ministries.length} total`}
+          />
+          <EnhancedStatCard
+            label="Upcoming Events"
+            value={upcomingEvents.length}
+            icon={CalendarDays}
+            tone="orange"
+            subtitle="Next 30 days"
           />
         </div>
       )}
@@ -199,18 +292,46 @@ export function Dashboard() {
       {hasRole('administrator', 'secretary') && (
         <div className="grid gap-6 lg:grid-cols-2">
           <Card>
-            <CardHeader title="Attendance Trend (Last 6 Months)" />
+            <CardHeader title="Attendance Rate" />
             {attendanceQuery.isLoading ? (
               <Spinner />
             ) : attendanceTrend.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={attendanceTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#1E5EFF" name="Attendance" />
-                </BarChart>
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={attendanceTrend}>
+                  <defs>
+                    <linearGradient id="colorAttendance" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fontSize: 12 }} 
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 12 }} 
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      borderRadius: '8px', 
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                    }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="count" 
+                    stroke="#3b82f6" 
+                    strokeWidth={2}
+                    fill="url(#colorAttendance)"
+                    name="Attendance"
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             ) : (
               <p className="py-10 text-center text-sm text-slate-400">No attendance data yet</p>
