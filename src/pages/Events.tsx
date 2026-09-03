@@ -5,8 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, MapPin, CalendarDays, MessageSquare, Clock } from 'lucide-react';
-import { format, isSameMonth, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, subHours } from 'date-fns';
+import { Plus, Pencil, Trash2, MapPin, CalendarDays, MessageSquare, Clock, User, List as ListIcon, Calendar } from 'lucide-react';
+import { format, isSameMonth, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, subHours, isPast, isFuture } from 'date-fns';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
@@ -18,6 +18,7 @@ import { scheduleEventReminder } from '@/services/sms';
 import { SendSmsModal } from '@/features/sms/SendSmsModal';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { cn } from '@/utils/cn';
 import type { Event } from '@/types/database';
 
@@ -34,8 +35,6 @@ type FormValues = z.infer<typeof schema>;
 export function Events() {
   const [searchParams] = useSearchParams();
   const { hasRole, profile } = useAuth();
-  // Ministry Leaders can create events; who can edit/delete a *specific*
-  // event is decided per-row below via canManageEvent().
   const canManage = hasRole('administrator', 'secretary');
   const canCreate = hasRole('administrator', 'secretary', 'ministry_leader');
   const queryClient = useQueryClient();
@@ -46,9 +45,36 @@ export function Events() {
   const [smsModalOpen, setSmsModalOpen] = useState(false);
   const [selectedEventForSms, setSelectedEventForSms] = useState<Event | null>(null);
   const [scheduleReminder, setScheduleReminder] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const eventsQuery = useQuery({ queryKey: ['events'], queryFn: fetchEvents });
   useRealtimeQuery('events', ['events']);
+
+  // Fetch creator names for events
+  const creatorIds = useMemo(() => {
+    const ids = eventsQuery.data?.map(e => e.created_by).filter(Boolean) ?? [];
+    return [...new Set(ids)];
+  }, [eventsQuery.data]);
+
+  const creatorsQuery = useQuery({
+    queryKey: ['profiles', creatorIds],
+    queryFn: async () => {
+      if (creatorIds.length === 0) return [];
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', creatorIds);
+      return data ?? [];
+    },
+    enabled: creatorIds.length > 0,
+  });
+
+  const creatorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    creatorsQuery.data?.forEach(c => map.set(c.id, c.full_name));
+    return map;
+  }, [creatorsQuery.data]);
 
   const {
     register,
@@ -58,6 +84,23 @@ export function Events() {
   } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { status: 'upcoming' } });
 
   const events = eventsQuery.data ?? [];
+  
+  // Calculate stats
+  const stats = useMemo(() => {
+    const upcoming = events.filter(e => e.status === 'upcoming' && isFuture(new Date(e.start_time))).length;
+    const completed = events.filter(e => e.status === 'completed' || isPast(new Date(e.start_time))).length;
+    return { upcoming, completed, total: events.length };
+  }, [events]);
+
+  // Filter events by status
+  const filteredEvents = useMemo(() => {
+    if (statusFilter === 'all') return events;
+    if (statusFilter === 'upcoming') return events.filter(e => e.status === 'upcoming' && isFuture(new Date(e.start_time)));
+    if (statusFilter === 'completed') return events.filter(e => e.status === 'completed' || isPast(new Date(e.start_time)));
+    if (statusFilter === 'cancelled') return events.filter(e => e.status === 'cancelled');
+    return events.filter(e => e.status === statusFilter);
+  }, [events, statusFilter]);
+
   const daysInMonth = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) });
   const eventsByDay = (day: Date) => events.filter((e) => isSameDay(new Date(e.start_time), day));
 
@@ -166,7 +209,9 @@ export function Events() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Events</h1>
-          <p className="text-sm text-slate-500">Plan and track church events.</p>
+          <p className="text-sm text-slate-500">
+            {stats.upcoming} upcoming · {stats.completed} completed
+          </p>
         </div>
         {canCreate && (
           <Button onClick={openCreate}>
@@ -175,7 +220,140 @@ export function Events() {
         )}
       </div>
 
-      <Card>
+      {/* View Toggle and Filter */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+          <button
+            onClick={() => setViewMode('list')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              viewMode === 'list' ? 'bg-primary text-white' : 'text-slate-600 hover:text-ink'
+            )}
+          >
+            <ListIcon className="h-4 w-4" />
+            List
+          </button>
+          <button
+            onClick={() => setViewMode('calendar')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              viewMode === 'calendar' ? 'bg-primary text-white' : 'text-slate-600 hover:text-ink'
+            )}
+          >
+            <Calendar className="h-4 w-4" />
+            Calendar
+          </button>
+        </div>
+
+        <Select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          options={[
+            { value: 'all', label: 'All Events' },
+            { value: 'upcoming', label: 'Upcoming' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'cancelled', label: 'Cancelled' },
+          ]}
+          className="w-full sm:w-48"
+        />
+      </div>
+
+      {/* List View */}
+      {viewMode === 'list' && (
+        <>
+          {eventsQuery.isLoading ? (
+            <Spinner />
+          ) : filteredEvents.length === 0 ? (
+            <EmptyState icon={CalendarDays} title="No events" description="No events match the selected filter." />
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {filteredEvents.map((event) => {
+                const eventDate = new Date(event.start_time);
+                const creatorName = event.created_by ? creatorMap.get(event.created_by) : null;
+                
+                return (
+                  <Card key={event.id} className="hover:shadow-md transition-shadow">
+                    <div className="flex gap-4">
+                      {/* Date Badge */}
+                      <div className="flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-lg bg-primary text-white">
+                        <div className="text-xs font-semibold uppercase">
+                          {format(eventDate, 'MMM')}
+                        </div>
+                        <div className="text-2xl font-bold leading-none">
+                          {format(eventDate, 'd')}
+                        </div>
+                      </div>
+
+                      {/* Event Details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h3 className="font-semibold text-ink text-lg truncate">{event.title}</h3>
+                          <Badge tone={statusTone(event.status)}>{event.status}</Badge>
+                        </div>
+
+                        {event.description && (
+                          <p className="text-sm text-slate-600 line-clamp-2 mb-3">{event.description}</p>
+                        )}
+
+                        <div className="space-y-1.5 text-xs text-slate-500">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span>{format(eventDate, 'h:mm a')}</span>
+                          </div>
+                          {event.location && (
+                            <div className="flex items-center gap-1.5">
+                              <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                              <span className="truncate">{event.location}</span>
+                            </div>
+                          )}
+                          {creatorName && (
+                            <div className="flex items-center gap-1.5">
+                              <User className="h-3.5 w-3.5 flex-shrink-0" />
+                              <span className="truncate">{creatorName}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        {canManageEvent(event) && (
+                          <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
+                            <button
+                              onClick={() => openSmsModal(event)}
+                              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-secondary-50 hover:text-secondary transition-colors"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5" />
+                              SMS
+                            </button>
+                            <button
+                              onClick={() => openEdit(event.id)}
+                              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-ink transition-colors"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(event)}
+                              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Calendar View */}
+      {viewMode === 'calendar' && (
+        <>
+          <Card>
         <div className="mb-3 flex items-center justify-between">
           <button onClick={() => setMonth(subMonths(month, 1))} className="rounded-md px-2 py-1 text-sm hover:bg-slate-100">
             ‹
@@ -261,6 +439,8 @@ export function Events() {
             </Card>
           ))}
         </div>
+      )}
+        </>
       )}
 
       <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Edit event' : 'Create event'}>

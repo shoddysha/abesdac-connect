@@ -196,23 +196,66 @@ export function Ministries() {
     setFormOpen(true);
   }
 
-  // Handle form submit (create)
+  // Open edit modal
+  function openEdit(ministry: Ministry) {
+    if (!canManage && profile?.id !== ministry.leader_id) {
+      toast.error('You do not have permission to edit this ministry');
+      return;
+    }
+    
+    reset({
+      name: ministry.name,
+      description: ministry.description ?? '',
+      leader_id: ministry.leader_id ?? '',
+    });
+    setEditingId(ministry.id);
+    setLogoFile(null);
+    setLogoPreview(ministry.logo_url);
+    setFormOpen(true);
+  }
+
+  // Check if user can manage a specific ministry
+  function canManageMinistry(ministry: Ministry) {
+    return canManage || (profile?.role === 'ministry_leader' && ministry.leader_id === profile.id);
+  }
+
+  // Handle delete ministry (Admin/Secretary only)
+  async function handleDelete(id: string) {
+    if (!canManage) {
+      toast.error('Only administrators and secretaries can delete ministries');
+      return;
+    }
+    
+    if (!confirm('Delete this ministry? Members will be unassigned, not deleted.')) return;
+    
+    try {
+      await deleteMinistry(id);
+      toast.success('Ministry deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['ministries'] });
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  // Handle form submit (create/edit)
   async function onSubmit(values: FormValues) {
     try {
-      let logo_url: string | null = null;
+      let logo_url: string | null | undefined = editingId ? undefined : null;
+      
       if (logoFile) {
         logo_url = await uploadMinistryLogo(logoFile, values.name);
       }
 
+      // Ministry Leaders can edit their ministry's info, but not reassign the leader
       const payload = {
         ...values,
-        leader_id: values.leader_id || null,
-        logo_url,
+        ...(canManage ? { leader_id: values.leader_id || null } : {}),
+        ...(logo_url !== undefined ? { logo_url } : {}),
       };
 
       if (editingId) {
         await updateMinistry(editingId, payload);
-        toast.success('Ministry updated');
+        toast.success('Ministry updated successfully');
       } else {
         await createMinistry(payload);
         toast.success('Ministry created successfully');
@@ -245,7 +288,26 @@ export function Ministries() {
     }
   }
 
+  // Handle export members to CSV
+  async function handleExport(ministry: Ministry) {
+    setExportingId(ministry.id);
+    try {
+      const rows = await fetchMinistryMembers(ministry.id);
+      if (!rows || rows.length === 0) {
+        toast('No members to export yet', { icon: 'ℹ️' });
+        return;
+      }
+      downloadMembersCsv(ministry.name, rows);
+      toast.success('Members exported successfully');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setExportingId(null);
+    }
+  }
+
   const leaderOptions = (profilesQuery.data ?? []).map((p) => ({ value: p.id, label: p.full_name }));
+  const openMembersMinistry = ministries.find((m) => m.id === membersModalId);
 
   return (
     <div className="space-y-6">
@@ -419,23 +481,52 @@ export function Ministries() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => handleViewDetails(ministry)}
-                      className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!isLeader}
-                      title={isLeader ? 'View ministry dashboard' : 'Only ministry leaders can access dashboard'}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMembersModalId(ministry.id);
+                      }}
+                      className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                     >
-                      View Details
+                      <UserPlus className="h-4 w-4 inline mr-1" />
+                      Members
                     </button>
-                    <button 
-                      onClick={() => handleManage(ministry)}
-                      className={`flex-1 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${colors.button} disabled:opacity-50 disabled:cursor-not-allowed`}
-                      disabled={!canManage && !isLeader}
-                      title={canManage || isLeader ? 'Manage ministry tasks' : 'No permission to manage'}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExport(ministry);
+                      }}
+                      disabled={exportingId === ministry.id}
+                      className="px-3 py-2 text-sm font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
                     >
-                      Manage
+                      <Download className="h-4 w-4 inline mr-1" />
+                      Export
                     </button>
+                    {canManageMinistry(ministry) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEdit(ministry);
+                        }}
+                        className="px-3 py-2 text-sm font-medium text-orange-700 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
+                      >
+                        <Pencil className="h-4 w-4 inline mr-1" />
+                        Edit
+                      </button>
+                    )}
+                    {canManage && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(ministry.id);
+                        }}
+                        className="px-3 py-2 text-sm font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4 inline mr-1" />
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -443,6 +534,193 @@ export function Ministries() {
           })}
         </div>
       )}
+
+      {/* Create/Edit Ministry Modal */}
+      <Modal 
+        open={formOpen} 
+        onClose={() => setFormOpen(false)} 
+        title={editingId ? 'Edit Ministry' : 'Create Ministry'}
+      >
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Ministry Logo Upload */}
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-slate-100 border-2 border-slate-200">
+              {logoPreview ? (
+                <img src={logoPreview} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <ImagePlus className="h-6 w-6 text-slate-400" />
+              )}
+            </div>
+            <div>
+              <label className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
+                Upload Logo
+                <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+              </label>
+              <p className="text-xs text-slate-500 mt-2">PNG, JPG or GIF. Max size 2MB</p>
+            </div>
+          </div>
+
+          <Input 
+            label="Ministry Name" 
+            {...register('name')} 
+            error={errors.name?.message}
+            placeholder="e.g., Youth Ministry"
+          />
+          
+          <Textarea 
+            label="Description" 
+            {...register('description')}
+            placeholder="Brief description of the ministry..."
+            rows={3}
+          />
+          
+          {canManage && (
+            <Select
+              label="Ministry Leader"
+              placeholder="No leader assigned"
+              options={[{ value: '', label: 'No leader assigned' }, ...leaderOptions]}
+              {...register('leader_id')}
+            />
+          )}
+
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t border-slate-200">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => setFormOpen(false)} 
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              isLoading={isSubmitting} 
+              className="w-full sm:w-auto"
+            >
+              {editingId ? 'Save Changes' : 'Create Ministry'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Ministry Members Modal */}
+      {membersModalId && openMembersMinistry && (
+        <MinistryMembersModal
+          ministryId={membersModalId}
+          onClose={() => setMembersModalId(null)}
+          canManage={canManageMinistry(openMembersMinistry)}
+        />
+      )}
     </div>
+  );
+}
+
+// Ministry Members Modal Component
+function MinistryMembersModal({
+  ministryId,
+  onClose,
+  canManage,
+}: {
+  ministryId: string;
+  onClose: () => void;
+  canManage: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [addingMemberId, setAddingMemberId] = useState('');
+
+  const membersInMinistryQuery = useQuery({
+    queryKey: ['ministry-members', ministryId],
+    queryFn: () => fetchMinistryMembers(ministryId),
+  });
+
+  const allMembersQuery = useQuery({
+    queryKey: ['members', { status: 'active' }],
+    queryFn: () => fetchMembers({ status: 'active' }),
+  });
+
+  const assignedIds = new Set((membersInMinistryQuery.data ?? []).map((r: any) => r.members?.id));
+  const availableMembers = (allMembersQuery.data ?? []).filter((m) => !assignedIds.has(m.id));
+
+  async function handleAdd() {
+    if (!addingMemberId) return;
+    
+    try {
+      await addMemberToMinistry(ministryId, addingMemberId);
+      setAddingMemberId('');
+      queryClient.invalidateQueries({ queryKey: ['ministry-members', ministryId] });
+      queryClient.invalidateQueries({ queryKey: ['ministry-member-counts'] });
+      toast.success('Member added to ministry');
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  async function handleRemove(rowId: string) {
+    try {
+      await removeMemberFromMinistry(rowId);
+      queryClient.invalidateQueries({ queryKey: ['ministry-members', ministryId] });
+      queryClient.invalidateQueries({ queryKey: ['ministry-member-counts'] });
+      toast.success('Member removed from ministry');
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Ministry Members">
+      {canManage && (
+        <div className="mb-4 flex flex-col sm:flex-row gap-2">
+          <Select
+            value={addingMemberId}
+            onChange={(e) => setAddingMemberId(e.target.value)}
+            placeholder="Select a member to add"
+            options={[
+              { value: '', label: 'Select a member to add' },
+              ...availableMembers.map((m) => ({
+                value: m.id,
+                label: `${m.first_name} ${m.last_name}`,
+              })),
+            ]}
+          />
+          <Button onClick={handleAdd} disabled={!addingMemberId} className="sm:w-auto">
+            <UserPlus className="h-4 w-4" />
+            Add
+          </Button>
+        </div>
+      )}
+
+      {membersInMinistryQuery.isLoading ? (
+        <Spinner />
+      ) : (membersInMinistryQuery.data ?? []).length === 0 ? (
+        <p className="py-6 text-center text-sm text-slate-500">No members assigned yet.</p>
+      ) : (
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {membersInMinistryQuery.data!.map((row: any) => (
+            <div
+              key={row.id}
+              className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-medium text-slate-900">
+                  {row.members?.first_name} {row.members?.last_name}
+                </span>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Joined: {new Date(row.joined_at).toLocaleDateString()}
+                </p>
+              </div>
+              {canManage && (
+                <button
+                  onClick={() => handleRemove(row.id)}
+                  className="ml-2 p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                  title="Remove from ministry"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
   );
 }
