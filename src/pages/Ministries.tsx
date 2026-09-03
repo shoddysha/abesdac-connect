@@ -1,11 +1,15 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Grid, List as ListIcon, Church } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, Grid, List as ListIcon, Church, Users, Calendar, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { fetchMinistries, fetchMinistryMemberCounts } from '@/services/ministries';
+import { fetchEvents } from '@/services/events';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
+import toast from 'react-hot-toast';
 import type { Ministry } from '@/types/database';
 
 type ViewMode = 'grid' | 'list';
@@ -20,20 +24,68 @@ const ministryColors = [
 ];
 
 export function Ministries() {
-  const { hasRole } = useAuth();
+  const { hasRole, profile } = useAuth();
   const canManage = hasRole('administrator', 'secretary');
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const ministriesQuery = useQuery({ queryKey: ['ministries'], queryFn: fetchMinistries });
   const memberCountsQuery = useQuery({ queryKey: ['ministry-member-counts'], queryFn: fetchMinistryMemberCounts });
   
+  // Fetch ministry reports count
+  const reportsCountQuery = useQuery({
+    queryKey: ['ministry-reports-count'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ministry_reports')
+        .select('ministry_id, id');
+      if (error) throw error;
+      
+      // Group by ministry_id
+      const counts: Record<string, number> = {};
+      data.forEach(report => {
+        counts[report.ministry_id] = (counts[report.ministry_id] || 0) + 1;
+      });
+      return counts;
+    }
+  });
+
+  // Fetch ministry tasks count
+  const tasksCountQuery = useQuery({
+    queryKey: ['ministry-tasks-count'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ministry_tasks')
+        .select('ministry_id, id, status');
+      if (error) throw error;
+      
+      // Group by ministry_id
+      const counts: Record<string, { total: number; pending: number }> = {};
+      data.forEach(task => {
+        if (!counts[task.ministry_id]) {
+          counts[task.ministry_id] = { total: 0, pending: 0 };
+        }
+        counts[task.ministry_id].total++;
+        if (task.status === 'pending' || task.status === 'in_progress') {
+          counts[task.ministry_id].pending++;
+        }
+      });
+      return counts;
+    }
+  });
+  
   useRealtimeQuery('ministries', ['ministries']);
   useRealtimeQuery('ministry_members', ['ministry-member-counts']);
+  useRealtimeQuery('ministry_reports', ['ministry-reports-count']);
+  useRealtimeQuery('ministry_tasks', ['ministry-tasks-count']);
 
   const ministries = ministriesQuery.data ?? [];
   const memberCounts = memberCountsQuery.data ?? {};
+  const reportsCounts = reportsCountQuery.data ?? {};
+  const tasksCounts = tasksCountQuery.data ?? {};
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -57,10 +109,35 @@ export function Ministries() {
     return ministryColors[index % ministryColors.length];
   }
 
-  // Calculate events for 2025 (placeholder - would need actual event data)
-  function getEventsCount(ministryId: string): number {
-    // This would come from an actual events query filtered by ministry
-    return Math.floor(Math.random() * 15) + 3; // Placeholder
+  // Handle View Details - Navigate to ministry dashboard if user is the leader
+  function handleViewDetails(ministry: Ministry) {
+    // Check if current user is the leader of this ministry
+    if (profile?.id === ministry.leader_id) {
+      navigate('/ministry-dashboard');
+    } else {
+      toast.info('Only ministry leaders can access the ministry dashboard');
+    }
+  }
+
+  // Handle Manage - Navigate to ministry tasks/reports
+  function handleManage(ministry: Ministry) {
+    // Check if user has permission
+    if (canManage || profile?.id === ministry.leader_id) {
+      navigate('/ministry-tasks');
+    } else {
+      toast.error('You do not have permission to manage this ministry');
+    }
+  }
+
+  // Handle Create Ministry
+  async function handleCreateMinistry() {
+    if (!canManage) {
+      toast.error('Only administrators and secretaries can create ministries');
+      return;
+    }
+    // Navigate to a create form or open modal
+    toast.info('Ministry creation modal would open here');
+    // TODO: Implement ministry creation modal
   }
 
   return (
@@ -74,7 +151,10 @@ export function Ministries() {
           </p>
         </div>
         {canManage && (
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button 
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={handleCreateMinistry}
+          >
             <Plus className="h-4 w-4" />
             Create Ministry
           </Button>
@@ -139,7 +219,9 @@ export function Ministries() {
           {filteredMinistries.map((ministry, index) => {
             const colors = getMinistryColor(index);
             const memberCount = memberCounts[ministry.id] ?? 0;
-            const eventsCount = getEventsCount(ministry.id);
+            const reportsCount = reportsCounts[ministry.id] ?? 0;
+            const taskCounts = tasksCounts[ministry.id] ?? { total: 0, pending: 0 };
+            const isLeader = profile?.id === ministry.leader_id;
             
             return (
               <div
@@ -159,11 +241,18 @@ export function Ministries() {
                       {/* Title and Status */}
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-slate-900 mb-1">{ministry.name}</h3>
-                        {ministry.is_active && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-                            Active
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {ministry.is_active && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                              Active
+                            </span>
+                          )}
+                          {isLeader && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                              Your Ministry
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -173,30 +262,71 @@ export function Ministries() {
                     {ministry.description || 'No description provided'}
                   </p>
 
-                  {/* Stats */}
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">Leader</span>
-                      <span className="font-medium text-slate-900">
-                        {ministry.profiles?.full_name || 'Unassigned'}
-                      </span>
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    {/* Members */}
+                    <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
+                        <Users className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Members</p>
+                        <p className="text-sm font-bold text-slate-900">{memberCount}</p>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">Members</span>
-                      <span className="font-bold text-blue-600">{memberCount}</span>
+
+                    {/* Reports */}
+                    <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100">
+                        <TrendingUp className="h-4 w-4 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Reports</p>
+                        <p className="text-sm font-bold text-slate-900">{reportsCount}</p>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">Events (2025)</span>
-                      <span className="font-medium text-slate-900">{eventsCount}</span>
+
+                    {/* Tasks */}
+                    <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg col-span-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100">
+                        <Calendar className="h-4 w-4 text-orange-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-slate-500">Tasks</p>
+                        <p className="text-sm font-bold text-slate-900">
+                          {taskCounts.total} total
+                          {taskCounts.pending > 0 && (
+                            <span className="ml-2 text-orange-600">· {taskCounts.pending} pending</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Leader Info */}
+                  <div className="mb-4 p-3 bg-slate-50 rounded-lg">
+                    <p className="text-xs text-slate-500 mb-1">Ministry Leader</p>
+                    <p className="text-sm font-medium text-slate-900">
+                      {ministry.profiles?.full_name || 'Unassigned'}
+                    </p>
                   </div>
 
                   {/* Action Buttons */}
                   <div className="flex gap-2">
-                    <button className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
+                    <button 
+                      onClick={() => handleViewDetails(ministry)}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!isLeader}
+                      title={isLeader ? 'View ministry dashboard' : 'Only ministry leaders can access dashboard'}
+                    >
                       View Details
                     </button>
-                    <button className={`flex-1 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${colors.button}`}>
+                    <button 
+                      onClick={() => handleManage(ministry)}
+                      className={`flex-1 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${colors.button} disabled:opacity-50 disabled:cursor-not-allowed`}
+                      disabled={!canManage && !isLeader}
+                      title={canManage || isLeader ? 'Manage ministry tasks' : 'No permission to manage'}
+                    >
                       Manage
                     </button>
                   </div>

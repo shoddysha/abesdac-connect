@@ -1,11 +1,11 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useState, type ChangeEvent } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, type ChangeEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { KeyRound, User, Database, Bell, Clock, Shield, Download, Mail, Building2 } from 'lucide-react';
+import { KeyRound, User, Database, Bell, Clock, Shield, Download, Mail, Building2, Palette } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,7 @@ import { updateProfileDetails } from '@/services/users';
 import { uploadAvatar } from '@/services/storage';
 import { generateFullBackup, downloadBackupFile } from '@/services/backup';
 import { RestoreBackupModal } from '@/features/backup/RestoreBackupModal';
+import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { supabase } from '@/lib/supabase';
 
 const profileSchema = z.object({
@@ -49,17 +50,49 @@ export function Settings() {
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
 
-  // Notification preferences
-  const [notificationPrefs, setNotificationPrefs] = useState(() => {
-    const saved = profile?.id ? localStorage.getItem(`notif_prefs_${profile.id}`) : null;
-    return saved ? JSON.parse(saved) : {
-      task_assigned: true,
-      report_due: true,
-      event_reminder: true,
-      birthday_reminder: true,
-      member_followup: true,
-    };
+  // Fetch user preferences from database with real-time updates
+  const preferencesQuery = useQuery({
+    queryKey: ['user-preferences', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('notification_preferences, display_preferences')
+        .eq('id', profile.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!profile?.id,
   });
+
+  useRealtimeQuery('profiles', ['user-preferences', profile?.id]);
+
+  // Initialize preferences state from database
+  const [notificationPrefs, setNotificationPrefs] = useState({
+    task_assigned: true,
+    task_completed: true,
+    report_due: true,
+    report_submitted: true,
+    event_reminder: true,
+    birthday_reminder: true,
+    member_followup: true,
+    ministry_update: true,
+  });
+
+  const [displayPrefs, setDisplayPrefs] = useState({
+    theme: 'light',
+    items_per_page: 10,
+    date_format: 'MMM d, yyyy',
+  });
+
+  // Update state when preferences load from database
+  useEffect(() => {
+    if (preferencesQuery.data) {
+      setNotificationPrefs(preferencesQuery.data.notification_preferences || notificationPrefs);
+      setDisplayPrefs(preferencesQuery.data.display_preferences || displayPrefs);
+    }
+  }, [preferencesQuery.data]);
 
   // Session timeout
   const [idleTimeout, setIdleTimeout] = useState(() => {
@@ -143,17 +176,75 @@ export function Settings() {
     toast.success(`Session timeout updated to ${timeout} minutes`);
   }
 
-  function updateNotificationPreference(key: string, value: boolean) {
+  async function updateNotificationPreference(key: string, value: boolean) {
+    if (!profile?.id) return;
     const updated = { ...notificationPrefs, [key]: value };
     setNotificationPrefs(updated);
     try {
-      if (profile?.id) {
-        localStorage.setItem(`notif_prefs_${profile.id}`, JSON.stringify(updated));
-      }
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          notification_preferences: updated,
+          updated_preferences_at: new Date().toISOString()
+        })
+        .eq('id', profile.id);
+      if (error) throw error;
       toast.success('Notification preference updated');
+      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
+    } catch (err) {
+      toast.error((err as Error).message);
+      // Revert on error
+      setNotificationPrefs(notificationPrefs);
+    }
+  }
+
+  async function updateDisplayPreference(key: string, value: any) {
+    if (!profile?.id) return;
+    const updated = { ...displayPrefs, [key]: value };
+    setDisplayPrefs(updated);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          display_preferences: updated,
+          updated_preferences_at: new Date().toISOString()
+        })
+        .eq('id', profile.id);
+      if (error) throw error;
+      toast.success('Display preference updated');
+      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
+    } catch (err) {
+      toast.error((err as Error).message);
+      // Revert on error
+      setDisplayPrefs(displayPrefs);
+    }
+  }
+
+  async function downloadMyData() {
+    if (!profile?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', profile.id)
+        .single();
+      if (error) throw error;
+      const dataStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `my-profile-data-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Profile data downloaded');
     } catch (err) {
       toast.error((err as Error).message);
     }
+  }
+
+  function viewAuditLogs() {
+    navigate('/audit-logs');
   }
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
@@ -339,6 +430,18 @@ export function Settings() {
                   </label>
                   <label className="flex items-center justify-between cursor-pointer group p-4 rounded-lg hover:bg-slate-50 transition-colors">
                     <div>
+                      <span className="text-sm text-slate-900 font-medium">Task completions</span>
+                      <p className="text-xs text-slate-500 mt-0.5">Get notified when tasks are completed</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      checked={notificationPrefs.task_completed}
+                      onChange={(e) => updateNotificationPreference('task_completed', e.target.checked)}
+                    />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer group p-4 rounded-lg hover:bg-slate-50 transition-colors">
+                    <div>
                       <span className="text-sm text-slate-900 font-medium">Report due reminders</span>
                       <p className="text-xs text-slate-500 mt-0.5">Remind me when reports are due</p>
                     </div>
@@ -347,6 +450,18 @@ export function Settings() {
                       className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       checked={notificationPrefs.report_due}
                       onChange={(e) => updateNotificationPreference('report_due', e.target.checked)}
+                    />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer group p-4 rounded-lg hover:bg-slate-50 transition-colors">
+                    <div>
+                      <span className="text-sm text-slate-900 font-medium">Report submissions</span>
+                      <p className="text-xs text-slate-500 mt-0.5">Get notified when reports are submitted</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      checked={notificationPrefs.report_submitted}
+                      onChange={(e) => updateNotificationPreference('report_submitted', e.target.checked)}
                     />
                   </label>
                   <label className="flex items-center justify-between cursor-pointer group p-4 rounded-lg hover:bg-slate-50 transition-colors">
@@ -387,6 +502,74 @@ export function Settings() {
                   onChange={(e) => updateNotificationPreference('birthday_reminder', e.target.checked)}
                 />
               </label>
+              {hasRole('administrator', 'secretary', 'ministry_leader') && (
+                <label className="flex items-center justify-between cursor-pointer group p-4 rounded-lg hover:bg-slate-50 transition-colors">
+                  <div>
+                    <span className="text-sm text-slate-900 font-medium">Ministry updates</span>
+                    <p className="text-xs text-slate-500 mt-0.5">Get notified about ministry changes</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    checked={notificationPrefs.ministry_update}
+                    onChange={(e) => updateNotificationPreference('ministry_update', e.target.checked)}
+                  />
+                </label>
+              )}
+            </div>
+          </Card>
+
+          {/* Display Preferences */}
+          <Card className="bg-white">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Display Preferences</h2>
+              <p className="text-sm text-slate-500 mt-1">Customize how information is displayed</p>
+            </div>
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Items per page</label>
+                <select
+                  value={displayPrefs.items_per_page}
+                  onChange={(e) => updateDisplayPreference('items_per_page', parseInt(e.target.value))}
+                  className="w-full sm:w-auto px-4 py-2.5 text-sm rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white"
+                >
+                  <option value={5}>5 items</option>
+                  <option value={10}>10 items</option>
+                  <option value={25}>25 items</option>
+                  <option value={50}>50 items</option>
+                  <option value={100}>100 items</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Date format</label>
+                <select
+                  value={displayPrefs.date_format}
+                  onChange={(e) => updateDisplayPreference('date_format', e.target.value)}
+                  className="w-full sm:w-auto px-4 py-2.5 text-sm rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white"
+                >
+                  <option value="MMM d, yyyy">Jan 15, 2024</option>
+                  <option value="dd/MM/yyyy">15/01/2024</option>
+                  <option value="MM/dd/yyyy">01/15/2024</option>
+                  <option value="yyyy-MM-dd">2024-01-15</option>
+                </select>
+              </div>
+            </div>
+          </Card>
+
+          {/* Data & Privacy */}
+          <Card className="bg-white">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Data & Privacy</h2>
+              <p className="text-sm text-slate-500 mt-1">Download your personal data</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600">
+                Download a JSON file containing all your profile information, preferences, and activity.
+              </p>
+              <Button variant="outline" onClick={downloadMyData}>
+                <Download className="h-4 w-4" />
+                Download my data
+              </Button>
             </div>
           </Card>
         </div>
@@ -450,26 +633,40 @@ export function Settings() {
           </Card>
 
           {hasRole('administrator') && (
-            <Card className="bg-white">
-              <div className="border-b border-slate-100 px-6 py-4">
-                <h2 className="text-lg font-semibold text-slate-900">Session Timeout</h2>
-                <p className="text-sm text-slate-500 mt-1">Auto-logout after inactivity</p>
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                  <div className="flex-1 max-w-xs">
-                    <Input
-                      type="number"
-                      label="Idle timeout (minutes)"
-                      value={idleTimeout}
-                      onChange={(e) => setIdleTimeout(e.target.value)}
-                      hint="Minimum 1 minute, recommended 15 minutes"
-                    />
-                  </div>
-                  <Button onClick={handleTimeoutUpdate}>Update timeout</Button>
+            <>
+              <Card className="bg-white">
+                <div className="border-b border-slate-100 px-6 py-4">
+                  <h2 className="text-lg font-semibold text-slate-900">Session Timeout</h2>
+                  <p className="text-sm text-slate-500 mt-1">Auto-logout after inactivity</p>
                 </div>
-              </div>
-            </Card>
+                <div className="p-6 space-y-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                    <div className="flex-1 max-w-xs">
+                      <Input
+                        type="number"
+                        label="Idle timeout (minutes)"
+                        value={idleTimeout}
+                        onChange={(e) => setIdleTimeout(e.target.value)}
+                        hint="Minimum 1 minute, recommended 15 minutes"
+                      />
+                    </div>
+                    <Button onClick={handleTimeoutUpdate}>Update timeout</Button>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="bg-white">
+                <div className="border-b border-slate-100 px-6 py-4">
+                  <h2 className="text-lg font-semibold text-slate-900">Admin Quick Actions</h2>
+                  <p className="text-sm text-slate-500 mt-1">Manage users and view system activity</p>
+                </div>
+                <div className="p-6 space-y-3">
+                  <Button variant="outline" onClick={viewAuditLogs} className="w-full sm:w-auto">
+                    View Audit Logs
+                  </Button>
+                </div>
+              </Card>
+            </>
           )}
         </div>
       )}
