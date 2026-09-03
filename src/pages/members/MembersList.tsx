@@ -85,11 +85,14 @@ export function MembersList() {
     }));
   }
 
-  // Pagination
-  const ITEMS_PER_PAGE = 10;
+  // Pagination - 9 for grid, 10 for list
+  const ITEMS_PER_PAGE = viewMode === 'grid' ? 9 : 10;
   const [currentPage, setCurrentPage] = useState(1);
   const totalPages = Math.ceil(members.length / ITEMS_PER_PAGE);
   const paginatedMembers = members.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  
+  // Reset to page 1 when view mode changes
+  useMemo(() => setCurrentPage(1), [viewMode]);
 
   // Helper functions
   function getInitials(firstName: string, lastName: string) {

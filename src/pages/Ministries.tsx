@@ -87,6 +87,8 @@ export function Ministries() {
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState<'name' | 'members' | 'recent'>('name');
 
   const ministriesQuery = useQuery({ queryKey: ['ministries'], queryFn: fetchMinistries });
   const memberCountsQuery = useQuery({ queryKey: ['ministry-member-counts'], queryFn: fetchMinistryMemberCounts });
@@ -114,41 +116,15 @@ export function Ministries() {
       return counts;
     }
   });
-
-  // Fetch ministry tasks count
-  const tasksCountQuery = useQuery({
-    queryKey: ['ministry-tasks-count'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('ministry_tasks')
-        .select('ministry_id, id, status');
-      if (error) throw error;
-      
-      // Group by ministry_id
-      const counts: Record<string, { total: number; pending: number }> = {};
-      data.forEach(task => {
-        if (!counts[task.ministry_id]) {
-          counts[task.ministry_id] = { total: 0, pending: 0 };
-        }
-        counts[task.ministry_id].total++;
-        if (task.status === 'pending' || task.status === 'in_progress') {
-          counts[task.ministry_id].pending++;
-        }
-      });
-      return counts;
-    }
-  });
   
   useRealtimeQuery('ministries', ['ministries']);
   useRealtimeQuery('ministry_members', ['ministry-member-counts']);
   useRealtimeQuery('ministry_reports', ['ministry-reports-count']);
-  useRealtimeQuery('ministry_tasks', ['ministry-tasks-count']);
   useRealtimeQuery('profiles', ['profiles']);
 
   const ministries = ministriesQuery.data ?? [];
   const memberCounts = memberCountsQuery.data ?? {};
   const reportsCounts = reportsCountQuery.data ?? {};
-  const tasksCounts = tasksCountQuery.data ?? {};
 
   const {
     register,
@@ -173,6 +149,33 @@ export function Ministries() {
       m.profiles?.full_name?.toLowerCase().includes(query)
     );
   }, [ministries, searchQuery]);
+
+  // Sort ministries
+  const sortedMinistries = useMemo(() => {
+    const sorted = [...filteredMinistries];
+    
+    switch (sortBy) {
+      case 'name':
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'members':
+        sorted.sort((a, b) => (memberCounts[b.id] ?? 0) - (memberCounts[a.id] ?? 0));
+        break;
+      case 'recent':
+        sorted.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        break;
+    }
+    
+    return sorted;
+  }, [filteredMinistries, sortBy, memberCounts]);
+
+  // Pagination - 9 per page
+  const ITEMS_PER_PAGE = 9;
+  const totalPages = Math.ceil(sortedMinistries.length / ITEMS_PER_PAGE);
+  const paginatedMinistries = sortedMinistries.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  
+  // Reset to page 1 when search or sort changes
+  useMemo(() => setCurrentPage(1), [searchQuery, sortBy]);
 
   // Get color for ministry based on index
   function getMinistryColor(index: number) {
@@ -330,8 +333,8 @@ export function Ministries() {
         )}
       </div>
 
-      {/* Search and View Toggle */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Search, Sort and View Toggle */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex-1 max-w-md relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
@@ -343,74 +346,94 @@ export function Ministries() {
           />
         </div>
 
-        {/* View Toggle */}
-        <div className="flex items-center bg-white border border-slate-200 rounded-lg overflow-hidden">
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-2 transition-colors ${
-              viewMode === 'grid'
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-            title="Grid view"
-          >
-            <Grid className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-2 transition-colors ${
-              viewMode === 'list'
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-            title="List view"
-          >
-            <ListIcon className="h-5 w-5" />
-          </button>
+        <div className="flex items-center gap-2">
+          {/* Sort Dropdown */}
+          <Select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'name' | 'members' | 'recent')}
+            options={[
+              { value: 'name', label: 'Sort by Name' },
+              { value: 'members', label: 'Sort by Members' },
+              { value: 'recent', label: 'Most Recent' },
+            ]}
+            className="w-40"
+          />
+
+          {/* View Toggle */}
+          <div className="flex items-center bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 transition-colors ${
+                viewMode === 'grid'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+              title="Grid view"
+            >
+              <Grid className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+              title="List view"
+            >
+              <ListIcon className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Ministry Cards */}
       {ministriesQuery.isLoading ? (
         <Spinner />
-      ) : filteredMinistries.length === 0 ? (
+      ) : sortedMinistries.length === 0 ? (
         <EmptyState 
           icon={Church} 
           title={searchQuery ? 'No ministries found' : 'No ministries yet'}
           description={searchQuery ? 'Try adjusting your search' : 'Create your first ministry to get started'}
         />
       ) : (
-        <div className={`grid gap-6 ${
+        <>
+        <div className={`grid gap-4 ${
           viewMode === 'grid' 
-            ? 'grid-cols-1 md:grid-cols-2' 
+            ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
             : 'grid-cols-1'
         }`}>
-          {filteredMinistries.map((ministry, index) => {
+          {paginatedMinistries.map((ministry, index) => {
             const colors = getMinistryColor(index);
             const memberCount = memberCounts[ministry.id] ?? 0;
             const reportsCount = reportsCounts[ministry.id] ?? 0;
-            const taskCounts = tasksCounts[ministry.id] ?? { total: 0, pending: 0 };
             const isLeader = profile?.id === ministry.leader_id;
             
             return (
               <div
                 key={ministry.id}
-                className={`bg-white rounded-xl border-2 border-slate-200 ${colors.border} border-t-4 overflow-hidden hover:shadow-lg transition-shadow`}
+                className={`bg-white rounded-lg border border-slate-200 ${colors.border} border-t-4 overflow-hidden hover:shadow-md transition-shadow ${
+                  viewMode === 'list' ? 'max-w-full' : ''
+                }`}
               >
                 {/* Card Content */}
-                <div className="p-6">
+                <div className={viewMode === 'grid' ? 'p-4' : 'p-3'}>
                   {/* Header */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-start gap-3 flex-1">
-                      {/* Icon */}
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${colors.bg}`}>
-                        <Church className="h-6 w-6 text-slate-700" />
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      {/* Logo or Icon */}
+                      <div className={`flex ${viewMode === 'grid' ? 'h-12 w-12' : 'h-10 w-10'} items-center justify-center rounded-lg ${!ministry.logo_url ? colors.bg : ''} flex-shrink-0 overflow-hidden`}>
+                        {ministry.logo_url ? (
+                          <img src={ministry.logo_url} alt={ministry.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <Church className={`${viewMode === 'grid' ? 'h-6 w-6' : 'h-5 w-5'} text-slate-700`} />
+                        )}
                       </div>
                       
                       {/* Title and Status */}
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-slate-900 mb-1">{ministry.name}</h3>
-                        <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className={`${viewMode === 'grid' ? 'text-base' : 'text-sm'} font-semibold text-slate-900 mb-1 truncate`}>{ministry.name}</h3>
+                        <div className="flex items-center gap-2 flex-wrap">
                           {ministry.is_active && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
                               Active
@@ -426,70 +449,70 @@ export function Ministries() {
                     </div>
                   </div>
 
-                  {/* Description */}
-                  <p className="text-sm text-slate-600 mb-4 line-clamp-2">
-                    {ministry.description || 'No description provided'}
-                  </p>
+                  {/* Description - Only show in grid view or collapsed in list */}
+                  {viewMode === 'grid' && (
+                    <p className="text-sm text-slate-600 mb-3 line-clamp-2">
+                      {ministry.description || 'No description provided'}
+                    </p>
+                  )}
 
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className={`grid ${viewMode === 'grid' ? 'grid-cols-2' : 'grid-cols-4'} gap-2 mb-3`}>
                     {/* Members */}
-                    <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
-                        <Users className="h-4 w-4 text-blue-600" />
+                    <div className={`flex items-center gap-2 ${viewMode === 'grid' ? 'p-2' : 'p-2'} bg-slate-50 rounded-lg`}>
+                      <div className={`flex ${viewMode === 'grid' ? 'h-7 w-7' : 'h-6 w-6'} items-center justify-center rounded-full bg-blue-100 flex-shrink-0`}>
+                        <Users className={`${viewMode === 'grid' ? 'h-3.5 w-3.5' : 'h-3 w-3'} text-blue-600`} />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs text-slate-500">Members</p>
-                        <p className="text-sm font-bold text-slate-900">{memberCount}</p>
+                        <p className={`${viewMode === 'grid' ? 'text-sm' : 'text-xs'} font-bold text-slate-900`}>{memberCount}</p>
                       </div>
                     </div>
 
                     {/* Reports */}
-                    <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100">
-                        <TrendingUp className="h-4 w-4 text-green-600" />
+                    <div className={`flex items-center gap-2 ${viewMode === 'grid' ? 'p-2' : 'p-2'} bg-slate-50 rounded-lg`}>
+                      <div className={`flex ${viewMode === 'grid' ? 'h-7 w-7' : 'h-6 w-6'} items-center justify-center rounded-full bg-green-100 flex-shrink-0`}>
+                        <TrendingUp className={`${viewMode === 'grid' ? 'h-3.5 w-3.5' : 'h-3 w-3'} text-green-600`} />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs text-slate-500">Reports</p>
-                        <p className="text-sm font-bold text-slate-900">{reportsCount}</p>
+                        <p className={`${viewMode === 'grid' ? 'text-sm' : 'text-xs'} font-bold text-slate-900`}>{reportsCount}</p>
                       </div>
                     </div>
+                    
+                    {/* Leader Info - Show in list view */}
+                    {viewMode === 'list' && (
+                      <div className="col-span-2 flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-slate-500">Leader</p>
+                          <p className="text-xs font-medium text-slate-900 truncate">
+                            {ministry.profiles?.full_name || 'Unassigned'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
-                    {/* Tasks */}
-                    <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg col-span-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100">
-                        <Calendar className="h-4 w-4 text-orange-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-xs text-slate-500">Tasks</p>
-                        <p className="text-sm font-bold text-slate-900">
-                          {taskCounts.total} total
-                          {taskCounts.pending > 0 && (
-                            <span className="ml-2 text-orange-600">· {taskCounts.pending} pending</span>
-                          )}
-                        </p>
-                      </div>
+                  {/* Leader Info - Only show in grid view */}
+                  {viewMode === 'grid' && (
+                    <div className="mb-3 p-2 bg-slate-50 rounded-lg">
+                      <p className="text-xs text-slate-500 mb-0.5">Ministry Leader</p>
+                      <p className="text-sm font-medium text-slate-900 truncate">
+                        {ministry.profiles?.full_name || 'Unassigned'}
+                      </p>
                     </div>
-                  </div>
-
-                  {/* Leader Info */}
-                  <div className="mb-4 p-3 bg-slate-50 rounded-lg">
-                    <p className="text-xs text-slate-500 mb-1">Ministry Leader</p>
-                    <p className="text-sm font-medium text-slate-900">
-                      {ministry.profiles?.full_name || 'Unassigned'}
-                    </p>
-                  </div>
+                  )}
 
                   {/* Action Buttons */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={`grid ${viewMode === 'grid' ? 'grid-cols-2' : 'grid-cols-4'} gap-2`}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setMembersModalId(ministry.id);
                       }}
-                      className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                      className={`px-2 ${viewMode === 'grid' ? 'py-2' : 'py-1.5'} text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors`}
                     >
-                      <UserPlus className="h-4 w-4 inline mr-1" />
+                      <UserPlus className="h-3.5 w-3.5 inline mr-1" />
                       Members
                     </button>
                     <button
@@ -498,9 +521,9 @@ export function Ministries() {
                         handleExport(ministry);
                       }}
                       disabled={exportingId === ministry.id}
-                      className="px-3 py-2 text-sm font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
+                      className={`px-2 ${viewMode === 'grid' ? 'py-2' : 'py-1.5'} text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50`}
                     >
-                      <Download className="h-4 w-4 inline mr-1" />
+                      <Download className="h-3.5 w-3.5 inline mr-1" />
                       Export
                     </button>
                     {canManageMinistry(ministry) && (
@@ -509,9 +532,9 @@ export function Ministries() {
                           e.stopPropagation();
                           openEdit(ministry);
                         }}
-                        className="px-3 py-2 text-sm font-medium text-orange-700 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
+                        className={`px-2 ${viewMode === 'grid' ? 'py-2' : 'py-1.5'} text-xs font-medium text-orange-700 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors`}
                       >
-                        <Pencil className="h-4 w-4 inline mr-1" />
+                        <Pencil className="h-3.5 w-3.5 inline mr-1" />
                         Edit
                       </button>
                     )}
@@ -521,9 +544,9 @@ export function Ministries() {
                           e.stopPropagation();
                           handleDelete(ministry.id);
                         }}
-                        className="px-3 py-2 text-sm font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                        className={`px-2 ${viewMode === 'grid' ? 'py-2' : 'py-1.5'} text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors`}
                       >
-                        <Trash2 className="h-4 w-4 inline mr-1" />
+                        <Trash2 className="h-3.5 w-3.5 inline mr-1" />
                         Delete
                       </button>
                     )}
@@ -533,6 +556,71 @@ export function Ministries() {
             );
           })}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 sm:px-6 rounded-lg mt-6">
+            <div className="flex flex-1 justify-between sm:hidden">
+              <Button
+                variant="outline"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </Button>
+            </div>
+            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-slate-700">
+                  Showing <span className="font-medium">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> to{' '}
+                  <span className="font-medium">{Math.min(currentPage * ITEMS_PER_PAGE, sortedMinistries.length)}</span> of{' '}
+                  <span className="font-medium">{sortedMinistries.length}</span> results
+                </p>
+              </div>
+              <div>
+                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Previous</span>
+                    ‹
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
+                        currentPage === page
+                          ? 'z-10 bg-blue-600 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
+                          : 'text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Next</span>
+                    ›
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {/* Create/Edit Ministry Modal */}
