@@ -45,6 +45,8 @@ import {
   type ChurchDocument,
   type DocumentCategory,
 } from '@/services/resources';
+import { fetchVideoTutorials, incrementVideoView, type VideoTutorial } from '@/services/help';
+import { AddVideoTutorialModal } from '@/features/help/AddVideoTutorialModal';
 
 const sermonSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -68,7 +70,7 @@ const documentSchema = z.object({
 
 type SermonFormValues = z.infer<typeof sermonSchema>;
 type DocumentFormValues = z.infer<typeof documentSchema>;
-type Tab = 'sermons' | 'documents';
+type Tab = 'sermons' | 'documents' | 'tutorials';
 
 export function Resources() {
   const { hasRole } = useAuth();
@@ -76,11 +78,14 @@ export function Resources() {
   const [activeTab, setActiveTab] = useState<Tab>('sermons');
   const [isSermonModalOpen, setIsSermonModalOpen] = useState(false);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [isTutorialModalOpen, setIsTutorialModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewSermon, setPreviewSermon] = useState<Sermon | null>(null);
+  const [previewTutorial, setPreviewTutorial] = useState<VideoTutorial | null>(null);
 
   const canUploadSermons = hasRole('administrator', 'secretary') || hasRole('ministry_leader'); // Will check for media ministry specifically
   const canUploadDocuments = hasRole('administrator', 'secretary');
+  const canUploadTutorials = hasRole('administrator', 'secretary');
 
   // Queries
   const sermonsQuery = useQuery({
@@ -91,6 +96,11 @@ export function Resources() {
   const documentsQuery = useQuery({
     queryKey: ['documents'],
     queryFn: () => fetchDocuments(),
+  });
+
+  const tutorialsQuery = useQuery({
+    queryKey: ['video-tutorials'],
+    queryFn: () => fetchVideoTutorials(),
   });
 
   const ministriesQuery = useQuery({
@@ -175,6 +185,7 @@ export function Resources() {
 
   const sermons = sermonsQuery.data || [];
   const documents = documentsQuery.data || [];
+  const tutorials = tutorialsQuery.data || [];
   const ministries = ministriesQuery.data || [];
 
   function handleSermonSubmit(values: SermonFormValues) {
@@ -208,6 +219,15 @@ export function Resources() {
   async function handleDownloadDocument(doc: ChurchDocument) {
     await incrementDocumentDownloads(doc.id);
     window.open(doc.file_url, '_blank');
+  }
+
+  function handleTutorialAdded() {
+    queryClient.invalidateQueries({ queryKey: ['video-tutorials'] });
+  }
+
+  function handleTutorialClick(tutorial: VideoTutorial) {
+    incrementVideoView(tutorial.id);
+    setPreviewTutorial(tutorial);
   }
 
   const categoryLabels: Record<DocumentCategory, string> = {
@@ -263,6 +283,18 @@ export function Resources() {
             <Video className="h-4 w-4" />
             Sermons
             <Badge tone="blue">{sermons.length}</Badge>
+          </button>
+          <button
+            onClick={() => setActiveTab('tutorials')}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'tutorials'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-slate-500 hover:text-ink hover:border-slate-300'
+            }`}
+          >
+            <Youtube className="h-4 w-4" />
+            Video Tutorials
+            <Badge tone="purple">{tutorials.length}</Badge>
           </button>
           <button
             onClick={() => setActiveTab('documents')}
@@ -346,6 +378,85 @@ export function Resources() {
                           variant="outline"
                           onClick={() => handleDeleteSermon(sermon.id, sermon.title)}
                           isLoading={deleteSermonMutation.isPending}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Video Tutorials Tab */}
+      {activeTab === 'tutorials' && (
+        <div className="space-y-6">
+          {/* Upload Button */}
+          {canUploadTutorials && (
+            <div className="flex justify-end">
+              <Button onClick={() => setIsTutorialModalOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Add Video Tutorial
+              </Button>
+            </div>
+          )}
+
+          {/* Tutorials List */}
+          {tutorialsQuery.isLoading ? (
+            <Spinner />
+          ) : tutorials.length === 0 ? (
+            <EmptyState
+              icon={Youtube}
+              title="No video tutorials yet"
+              description={canUploadTutorials ? "Add your first tutorial video to help users learn the system" : "No video tutorials have been added yet"}
+            />
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {tutorials.map((tutorial) => (
+                <Card key={tutorial.id} className="overflow-hidden">
+                  <div className="cursor-pointer" onClick={() => handleTutorialClick(tutorial)}>
+                    {tutorial.thumbnail_url ? (
+                      <img src={tutorial.thumbnail_url} alt={tutorial.title} className="w-full h-48 object-cover" />
+                    ) : (
+                      <div className="w-full h-48 bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+                        <Youtube className="h-12 w-12 text-purple-600" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <h3 className="font-semibold text-ink line-clamp-2">{tutorial.title}</h3>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Badge tone="purple">{tutorial.category}</Badge>
+                        {tutorial.duration_minutes && (
+                          <span className="text-xs text-slate-500">{tutorial.duration_minutes} min</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {tutorial.description && (
+                      <p className="text-sm text-slate-600 line-clamp-2">{tutorial.description}</p>
+                    )}
+
+                    <div className="flex items-center justify-between pt-3 border-t">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <Eye className="h-3 w-3" />
+                        <span>{tutorial.view_count} views</span>
+                      </div>
+                      {hasRole('administrator') && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Are you sure you want to delete "${tutorial.title}"?`)) {
+                              // TODO: Add delete tutorial mutation
+                              toast.success('Delete functionality coming soon');
+                            }
+                          }}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -689,6 +800,47 @@ export function Resources() {
           </div>
         </Modal>
       )}
+
+      {/* Tutorial Preview Modal */}
+      {previewTutorial && (
+        <Modal
+          open={!!previewTutorial}
+          onClose={() => setPreviewTutorial(null)}
+          title={previewTutorial.title}
+          size="xl"
+        >
+          <div className="space-y-4">
+            <YouTubePreview
+              url={previewTutorial.video_url}
+              title={previewTutorial.title}
+              autoplay
+              className="aspect-video"
+            />
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <Badge tone="purple">{previewTutorial.category}</Badge>
+                {previewTutorial.duration_minutes && (
+                  <span className="text-sm text-slate-600">{previewTutorial.duration_minutes} minutes</span>
+                )}
+                <span className="text-sm text-slate-500">{previewTutorial.view_count} views</span>
+              </div>
+            </div>
+            {previewTutorial.description && (
+              <div>
+                <h4 className="text-sm font-medium text-ink mb-2">Description</h4>
+                <p className="text-sm text-slate-600">{previewTutorial.description}</p>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Add Video Tutorial Modal */}
+      <AddVideoTutorialModal
+        isOpen={isTutorialModalOpen}
+        onClose={() => setIsTutorialModalOpen(false)}
+        onSuccess={handleTutorialAdded}
+      />
     </div>
   );
 }

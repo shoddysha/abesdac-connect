@@ -1,9 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { HelpCircle, Book, MessageSquare, Mail, Phone, FileText, Video, ChevronDown, ChevronRight, Send, ExternalLink, Calendar, CheckCircle, Clock } from 'lucide-react';
+import { HelpCircle, Book, Mail, Phone, FileText, Video, ChevronDown, ChevronRight, Calendar, CheckCircle, Eye } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Input, Textarea, Select } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
@@ -15,12 +14,14 @@ import {
   fetchVideoTutorials,
   fetchFAQs,
   fetchFAQCategories,
-  createSupportTicket,
-  fetchMyTickets,
   incrementFAQView,
   incrementVideoView,
+  type Documentation,
+  type VideoTutorial,
 } from '@/services/help';
-import toast from 'react-hot-toast';
+import { DocumentationDetailModal } from '@/features/help/DocumentationDetailModal';
+import { Modal } from '@/components/ui/Modal';
+import { YouTubePreview } from '@/components/YouTubePreview';
 import { format } from 'date-fns';
 
 export function HelpSupport() {
@@ -29,12 +30,9 @@ export function HelpSupport() {
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'documentation' | 'videos' | 'faq' | 'releases'>('documentation');
-  const [contactForm, setContactForm] = useState({
-    subject: '',
-    message: '',
-    priority: 'medium',
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<Documentation | null>(null);
+  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+  const [previewTutorial, setPreviewTutorial] = useState<VideoTutorial | null>(null);
 
   // Queries
   const releaseNotesQuery = useQuery({
@@ -72,17 +70,11 @@ export function HelpSupport() {
     queryFn: fetchFAQCategories,
   });
 
-  const myTicketsQuery = useQuery({
-    queryKey: ['my-support-tickets'],
-    queryFn: fetchMyTickets,
-  });
-
   // Real-time updates
   useRealtimeQuery('release_notes', ['release-notes', 'latest-release']);
   useRealtimeQuery('help_documentation', ['help-documentation', selectedCategory]);
   useRealtimeQuery('video_tutorials', ['video-tutorials']);
   useRealtimeQuery('faqs', ['faqs', selectedCategory]);
-  useRealtimeQuery('support_tickets', ['my-support-tickets']);
 
   const documentation = documentationQuery.data || [];
   const docCategories = docCategoriesQuery.data || [];
@@ -91,7 +83,6 @@ export function HelpSupport() {
   const faqCategories = faqCategoriesQuery.data || [];
   const releaseNotes = releaseNotesQuery.data || [];
   const latestRelease = latestReleaseQuery.data;
-  const myTickets = myTicketsQuery.data || [];
 
   // Group documentation by category
   const groupedDocs = useMemo(() => {
@@ -124,30 +115,17 @@ export function HelpSupport() {
     }
   }
 
-  async function handleSubmitTicket(e: React.FormEvent) {
-    e.preventDefault();
-    
-    if (!contactForm.subject || !contactForm.message) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-
-    setIsSubmitting(true);
-    
-    try {
-      await createSupportTicket(contactForm);
-      toast.success('Support ticket submitted successfully! We\'ll get back to you soon.');
-      setContactForm({ subject: '', message: '', priority: 'medium' });
-      queryClient.invalidateQueries({ queryKey: ['my-support-tickets'] });
-    } catch (error) {
-      toast.error('Failed to submit ticket. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+  function handleDocClick(doc: Documentation) {
+    setSelectedDoc(doc);
+    setIsDocModalOpen(true);
   }
 
   function handleVideoClick(videoId: string) {
     incrementVideoView(videoId);
+  }
+
+  function handleVideoAdded() {
+    queryClient.invalidateQueries({ queryKey: ['video-tutorials'] });
   }
 
   return (
@@ -184,7 +162,7 @@ export function HelpSupport() {
       )}
 
       {/* Quick Contact Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="text-center">
           <div className="flex flex-col items-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 mb-3">
@@ -213,19 +191,6 @@ export function HelpSupport() {
               className="text-sm text-green-600 hover:text-green-700 font-medium"
             >
               Call Now
-            </a>
-          </div>
-        </Card>
-
-        <Card className="text-center">
-          <div className="flex flex-col items-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 mb-3">
-              <MessageSquare className="h-6 w-6 text-purple-600" />
-            </div>
-            <h3 className="font-semibold text-slate-900 mb-1">My Tickets</h3>
-            <p className="text-sm text-slate-500 mb-3">{myTickets.filter(t => t.status === 'open').length} open tickets</p>
-            <a href="#tickets" className="text-sm text-purple-600 hover:text-purple-700 font-medium">
-              View Tickets
             </a>
           </div>
         </Card>
@@ -299,7 +264,11 @@ export function HelpSupport() {
                     <h3 className="text-lg font-semibold text-slate-900 mb-3">{category}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {docs.map((doc) => (
-                        <Card key={doc.id} className="hover:shadow-md transition-shadow cursor-pointer">
+                        <Card 
+                          key={doc.id} 
+                          className="hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => handleDocClick(doc)}
+                        >
                           <div className="flex items-start gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 flex-shrink-0">
                               <Book className="h-5 w-5 text-blue-600" />
@@ -328,41 +297,43 @@ export function HelpSupport() {
             ) : videos.length === 0 ? (
               <EmptyState 
                 icon={Video} 
-                title="Video tutorials coming soon" 
-                description="We're working on creating helpful video tutorials for you. Check back soon!"
+                title="No video tutorials yet" 
+                description="Video tutorials will appear here once they are uploaded in the Resources page."
               />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {videos.map((video) => (
-                  <Card key={video.id} className="overflow-hidden hover:shadow-md transition-shadow">
-                    <a
-                      href={video.video_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => handleVideoClick(video.id)}
-                      className="block"
-                    >
-                      {video.thumbnail_url ? (
-                        <img src={video.thumbnail_url} alt={video.title} className="w-full h-48 object-cover" />
-                      ) : (
-                        <div className="w-full h-48 bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
-                          <Video className="h-12 w-12 text-blue-600" />
-                        </div>
-                      )}
-                      <div className="p-4">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <h4 className="font-semibold text-slate-900 line-clamp-2">{video.title}</h4>
-                          <ExternalLink className="h-4 w-4 text-slate-400 flex-shrink-0" />
-                        </div>
-                        {video.description && (
-                          <p className="text-sm text-slate-500 line-clamp-2 mb-2">{video.description}</p>
-                        )}
-                        <div className="flex items-center justify-between text-xs text-slate-400">
-                          {video.duration_minutes && <span>{video.duration_minutes} min</span>}
-                          <span>{video.view_count} views</span>
-                        </div>
+                  <Card 
+                    key={video.id} 
+                    className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => {
+                      incrementVideoView(video.id);
+                      setPreviewTutorial(video);
+                    }}
+                  >
+                    {video.thumbnail_url ? (
+                      <img src={video.thumbnail_url} alt={video.title} className="w-full h-48 object-cover" />
+                    ) : (
+                      <div className="w-full h-48 bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+                        <Video className="h-12 w-12 text-purple-600" />
                       </div>
-                    </a>
+                    )}
+                    <div className="p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge tone="purple">{video.category}</Badge>
+                        {video.duration_minutes && (
+                          <span className="text-xs text-slate-500">{video.duration_minutes} min</span>
+                        )}
+                      </div>
+                      <h4 className="font-semibold text-slate-900 line-clamp-2 mb-2">{video.title}</h4>
+                      {video.description && (
+                        <p className="text-sm text-slate-500 line-clamp-2 mb-3">{video.description}</p>
+                      )}
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <Eye className="h-3 w-3" />
+                        <span>{video.view_count} views</span>
+                      </div>
+                    </div>
                   </Card>
                 ))}
               </div>
@@ -536,98 +507,6 @@ export function HelpSupport() {
         )}
       </div>
 
-      {/* Support Ticket Form */}
-      <div id="tickets">
-        <Card>
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Submit a Support Ticket</h2>
-        <p className="text-sm text-slate-500 mb-6">
-          Can't find what you're looking for? Send us a message and we'll get back to you as soon as possible.
-        </p>
-        
-        <form onSubmit={handleSubmitTicket} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Your Name"
-              value={profile?.full_name || ''}
-              disabled
-            />
-            <Input
-              label="Email"
-              value={profile?.email || ''}
-              disabled
-            />
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Subject"
-              placeholder="Brief description of your issue"
-              value={contactForm.subject}
-              onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-              required
-            />
-            <Select
-              label="Priority"
-              value={contactForm.priority}
-              onChange={(e) => setContactForm({ ...contactForm, priority: e.target.value })}
-              options={[
-                { value: 'low', label: 'Low' },
-                { value: 'medium', label: 'Medium' },
-                { value: 'high', label: 'High' },
-              ]}
-            />
-          </div>
-          
-          <Textarea
-            label="Message"
-            placeholder="Describe your issue or question in detail..."
-            rows={6}
-            value={contactForm.message}
-            onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-            required
-          />
-          
-          <div className="flex justify-end">
-            <Button type="submit" isLoading={isSubmitting}>
-              <Send className="h-4 w-4" />
-              Submit Ticket
-            </Button>
-          </div>
-        </form>
-
-        {/* My Tickets */}
-        {myTickets.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-slate-200">
-            <h3 className="font-semibold text-slate-900 mb-3">My Support Tickets</h3>
-            <div className="space-y-2">
-              {myTickets.slice(0, 5).map((ticket) => (
-                <div
-                  key={ticket.id}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-900 truncate">{ticket.subject}</p>
-                    <p className="text-xs text-slate-500">
-                      {format(new Date(ticket.created_at), 'MMM d, yyyy')}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      ticket.status === 'open' ? 'bg-amber-100 text-amber-700' :
-                      ticket.status === 'resolved' ? 'bg-green-100 text-green-700' :
-                      'bg-slate-100 text-slate-700'
-                    }`}>
-                      {ticket.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Card>
-      </div>
-
       {/* System Information */}
       <Card className="bg-slate-50">
         <h3 className="font-semibold text-slate-900 mb-3">System Information</h3>
@@ -652,6 +531,51 @@ export function HelpSupport() {
           </div>
         </div>
       </Card>
+
+      {/* Modals */}
+      <DocumentationDetailModal
+        isOpen={isDocModalOpen}
+        onClose={() => setIsDocModalOpen(false)}
+        documentation={selectedDoc}
+        allDocs={documentation}
+      />
+
+      {/* Tutorial Preview Modal */}
+      {previewTutorial && (
+        <Modal
+          open={!!previewTutorial}
+          onClose={() => setPreviewTutorial(null)}
+          title={previewTutorial.title}
+          size="xl"
+        >
+          <div className="space-y-4">
+            <YouTubePreview
+              url={previewTutorial.video_url}
+              title={previewTutorial.title}
+              autoplay
+              className="aspect-video"
+            />
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <Badge tone="purple">{previewTutorial.category}</Badge>
+                {previewTutorial.duration_minutes && (
+                  <span className="text-sm text-slate-600">{previewTutorial.duration_minutes} minutes</span>
+                )}
+                <span className="text-sm text-slate-500 flex items-center gap-1">
+                  <Eye className="h-3 w-3" />
+                  {previewTutorial.view_count} views
+                </span>
+              </div>
+            </div>
+            {previewTutorial.description && (
+              <div>
+                <h4 className="text-sm font-medium text-slate-900 mb-2">About this tutorial</h4>
+                <p className="text-sm text-slate-600">{previewTutorial.description}</p>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

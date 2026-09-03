@@ -245,13 +245,24 @@ export function Sms() {
   useEffect(() => {
     async function calculateCount() {
       if (recipientType === 'all') {
-        const allMembers = await fetchMembers({ status: 'active' });
-        const withPhone = allMembers.filter((m) => m.phone);
-        setRecipientCount(withPhone.length);
+        const allMembers = await fetchMembers({});
+        // Filter for active, non-archived members with phone numbers
+        const eligible = allMembers.filter((m) => 
+          m.status === 'active' && 
+          !m.is_archived && 
+          m.phone && 
+          m.phone.trim() !== ''
+        );
+        setRecipientCount(eligible.length);
       } else if (recipientType === 'ministry' && ministryId) {
-        const ministryMembers = await fetchMembers({ status: 'active', ministryId });
-        const withPhone = ministryMembers.filter((m) => m.phone);
-        setRecipientCount(withPhone.length);
+        const ministryMembers = await fetchMembers({ ministryId });
+        const eligible = ministryMembers.filter((m) => 
+          m.status === 'active' && 
+          !m.is_archived && 
+          m.phone && 
+          m.phone.trim() !== ''
+        );
+        setRecipientCount(eligible.length);
       } else if (recipientType === 'manual') {
         setRecipientCount(selectedMembers.length);
       } else {
