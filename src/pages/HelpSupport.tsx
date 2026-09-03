@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { HelpCircle, Book, MessageSquare, Mail, Phone, FileText, Video, ChevronDown, ChevronRight, Send, ExternalLink, Calendar, CheckCircle } from 'lucide-react';
+import { HelpCircle, Book, MessageSquare, Mail, Phone, FileText, Video, ChevronDown, ChevronRight, Send, ExternalLink, Calendar, CheckCircle, Clock } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Input';
+import { Spinner, EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import {
@@ -58,7 +59,7 @@ export function HelpSupport() {
 
   const videosQuery = useQuery({
     queryKey: ['video-tutorials'],
-    queryFn: fetchVideoTutorials,
+    queryFn: () => fetchVideoTutorials(),
   });
 
   const faqsQuery = useQuery({
@@ -253,52 +254,290 @@ export function HelpSupport() {
         ))}
       </div>
 
-      {/* FAQ Section */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Frequently Asked Questions</h2>
-        <div className="space-y-4">
-          {faqs.map((category, categoryIndex) => (
-            <div key={categoryIndex}>
-              <h3 className="text-lg font-semibold text-slate-900 mb-3">{category.category}</h3>
-              <div className="space-y-2">
-                {category.questions.map((faq, faqIndex) => {
-                  const faqId = `${categoryIndex}-${faqIndex}`;
-                  const isExpanded = expandedFaq === faqId;
-                  
-                  return (
-                    <Card key={faqId} className="cursor-pointer hover:shadow-sm transition-shadow">
-                      <button
-                        onClick={() => toggleFaq(faqId)}
-                        className="w-full flex items-start justify-between gap-3 text-left"
-                      >
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <HelpCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-slate-900 mb-1">{faq.question}</h4>
-                            {isExpanded && (
-                              <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-                                {faq.answer}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        {isExpanded ? (
-                          <ChevronDown className="h-5 w-5 text-slate-400 flex-shrink-0" />
-                        ) : (
-                          <ChevronRight className="h-5 w-5 text-slate-400 flex-shrink-0" />
-                        )}
-                      </button>
-                    </Card>
-                  );
-                })}
+      {/* Tab Content */}
+      <div className="min-h-[400px]">
+        {/* Documentation Tab */}
+        {activeTab === 'documentation' && (
+          <div className="space-y-4">
+            {/* Category Filter */}
+            {docCategories.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => setSelectedCategory('all')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                    selectedCategory === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All
+                </button>
+                {docCategories.map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                      selectedCategory === category
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+
+            {documentationQuery.isLoading ? (
+              <Spinner />
+            ) : documentation.length === 0 ? (
+              <EmptyState icon={Book} title="No documentation available" description="Documentation will be added soon." />
+            ) : (
+              <div className="space-y-6">
+                {Object.entries(groupedDocs).map(([category, docs]) => (
+                  <div key={category}>
+                    <h3 className="text-lg font-semibold text-slate-900 mb-3">{category}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {docs.map((doc) => (
+                        <Card key={doc.id} className="hover:shadow-md transition-shadow cursor-pointer">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 flex-shrink-0">
+                              <Book className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-slate-900 mb-1">{doc.title}</h4>
+                              <p className="text-sm text-slate-500 line-clamp-2">{doc.content.substring(0, 100)}...</p>
+                            </div>
+                            <ChevronRight className="h-5 w-5 text-slate-400 flex-shrink-0" />
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Video Tutorials Tab */}
+        {activeTab === 'videos' && (
+          <div>
+            {videosQuery.isLoading ? (
+              <Spinner />
+            ) : videos.length === 0 ? (
+              <EmptyState 
+                icon={Video} 
+                title="Video tutorials coming soon" 
+                description="We're working on creating helpful video tutorials for you. Check back soon!"
+              />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {videos.map((video) => (
+                  <Card key={video.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                    <a
+                      href={video.video_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => handleVideoClick(video.id)}
+                      className="block"
+                    >
+                      {video.thumbnail_url ? (
+                        <img src={video.thumbnail_url} alt={video.title} className="w-full h-48 object-cover" />
+                      ) : (
+                        <div className="w-full h-48 bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
+                          <Video className="h-12 w-12 text-blue-600" />
+                        </div>
+                      )}
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h4 className="font-semibold text-slate-900 line-clamp-2">{video.title}</h4>
+                          <ExternalLink className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                        </div>
+                        {video.description && (
+                          <p className="text-sm text-slate-500 line-clamp-2 mb-2">{video.description}</p>
+                        )}
+                        <div className="flex items-center justify-between text-xs text-slate-400">
+                          {video.duration_minutes && <span>{video.duration_minutes} min</span>}
+                          <span>{video.view_count} views</span>
+                        </div>
+                      </div>
+                    </a>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* FAQ Tab */}
+        {activeTab === 'faq' && (
+          <div className="space-y-4">
+            {/* Category Filter */}
+            {faqCategories.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => setSelectedCategory('all')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                    selectedCategory === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All
+                </button>
+                {faqCategories.map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                      selectedCategory === category
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {faqsQuery.isLoading ? (
+              <Spinner />
+            ) : faqs.length === 0 ? (
+              <EmptyState icon={HelpCircle} title="No FAQs available" description="FAQs will be added soon." />
+            ) : (
+              <div className="space-y-6">
+                {Object.entries(groupedFaqs).map(([category, categoryFaqs]) => (
+                  <div key={category}>
+                    <h3 className="text-lg font-semibold text-slate-900 mb-3">{category}</h3>
+                    <div className="space-y-2">
+                      {categoryFaqs.map((faq) => {
+                        const isExpanded = expandedFaq === faq.id;
+                        
+                        return (
+                          <Card key={faq.id} className="cursor-pointer hover:shadow-sm transition-shadow">
+                            <button
+                              onClick={() => toggleFaq(faq.id)}
+                              className="w-full flex items-start justify-between gap-3 text-left"
+                            >
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                <HelpCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-medium text-slate-900 mb-1">{faq.question}</h4>
+                                  {isExpanded && (
+                                    <p className="text-sm text-slate-600 mt-2 leading-relaxed whitespace-pre-line">
+                                      {faq.answer}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              {isExpanded ? (
+                                <ChevronDown className="h-5 w-5 text-slate-400 flex-shrink-0" />
+                              ) : (
+                                <ChevronRight className="h-5 w-5 text-slate-400 flex-shrink-0" />
+                              )}
+                            </button>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Release Notes Tab */}
+        {activeTab === 'releases' && (
+          <div>
+            {releaseNotesQuery.isLoading ? (
+              <Spinner />
+            ) : releaseNotes.length === 0 ? (
+              <EmptyState icon={FileText} title="No release notes available" description="Release notes will be added soon." />
+            ) : (
+              <div className="space-y-6">
+                {releaseNotes.map((release) => (
+                  <Card key={release.id}>
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-xl font-bold text-slate-900">v{release.version}</h3>
+                          <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
+                            {format(new Date(release.release_date), 'MMM d, yyyy')}
+                          </span>
+                        </div>
+                        <h4 className="text-lg font-semibold text-slate-700">{release.title}</h4>
+                        {release.description && (
+                          <p className="text-sm text-slate-500 mt-1">{release.description}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Features */}
+                    {release.features && release.features.length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4" />
+                          New Features
+                        </h5>
+                        <ul className="space-y-2">
+                          {release.features.map((feature, idx) => (
+                            <li key={idx} className="text-sm text-slate-600 pl-6 relative">
+                              <span className="absolute left-0 top-1.5 h-1.5 w-1.5 rounded-full bg-green-500"></span>
+                              <strong>{feature.title}:</strong> {feature.description}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Bug Fixes */}
+                    {release.bug_fixes && release.bug_fixes.length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4" />
+                          Bug Fixes
+                        </h5>
+                        <ul className="space-y-2">
+                          {release.bug_fixes.map((fix, idx) => (
+                            <li key={idx} className="text-sm text-slate-600 pl-6 relative">
+                              <span className="absolute left-0 top-1.5 h-1.5 w-1.5 rounded-full bg-red-500"></span>
+                              <strong>{fix.title}:</strong> {fix.description}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Improvements */}
+                    {release.improvements && release.improvements.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4" />
+                          Improvements
+                        </h5>
+                        <ul className="space-y-2">
+                          {release.improvements.map((improvement, idx) => (
+                            <li key={idx} className="text-sm text-slate-600 pl-6 relative">
+                              <span className="absolute left-0 top-1.5 h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                              <strong>{improvement.title}:</strong> {improvement.description}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Contact Form */}
-      <Card>
+      {/* Support Ticket Form */}
+      <Card id="tickets">
         <h2 className="text-xl font-bold text-slate-900 mb-4">Submit a Support Ticket</h2>
         <p className="text-sm text-slate-500 mb-6">
           Can't find what you're looking for? Send us a message and we'll get back to you as soon as possible.
@@ -318,13 +557,25 @@ export function HelpSupport() {
             />
           </div>
           
-          <Input
-            label="Subject"
-            placeholder="Brief description of your issue"
-            value={contactForm.subject}
-            onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-            required
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Subject"
+              placeholder="Brief description of your issue"
+              value={contactForm.subject}
+              onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
+              required
+            />
+            <Select
+              label="Priority"
+              value={contactForm.priority}
+              onChange={(e) => setContactForm({ ...contactForm, priority: e.target.value })}
+              options={[
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' },
+              ]}
+            />
+          </div>
           
           <Textarea
             label="Message"
@@ -342,6 +593,37 @@ export function HelpSupport() {
             </Button>
           </div>
         </form>
+
+        {/* My Tickets */}
+        {myTickets.length > 0 && (
+          <div className="mt-6 pt-6 border-t border-slate-200">
+            <h3 className="font-semibold text-slate-900 mb-3">My Support Tickets</h3>
+            <div className="space-y-2">
+              {myTickets.slice(0, 5).map((ticket) => (
+                <div
+                  key={ticket.id}
+                  className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-900 truncate">{ticket.subject}</p>
+                    <p className="text-xs text-slate-500">
+                      {format(new Date(ticket.created_at), 'MMM d, yyyy')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      ticket.status === 'open' ? 'bg-amber-100 text-amber-700' :
+                      ticket.status === 'resolved' ? 'bg-green-100 text-green-700' :
+                      'bg-slate-100 text-slate-700'
+                    }`}>
+                      {ticket.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* System Information */}
