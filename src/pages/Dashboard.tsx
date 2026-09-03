@@ -606,7 +606,7 @@ export function Dashboard() {
                     outerRadius={85}
                     paddingAngle={3}
                     label={({ name, percent }) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
+                      `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
                     }
                     labelLine={true}
                   >
@@ -614,7 +614,7 @@ export function Dashboard() {
                       <Cell key={i} fill={GENDER_COLORS[i]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: number) => [`${value} members`, '']} />
+                  <Tooltip formatter={(value: any) => [`${value} members`, '']} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>

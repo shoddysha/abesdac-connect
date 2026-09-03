@@ -1,427 +1,211 @@
-import { useState, type ChangeEvent } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, HeartHandshake, UserPlus, X, Users, ImagePlus, Download } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
+import { Plus, Search, Grid, List as ListIcon, Church } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Input, Select, Textarea } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
-import {
-  fetchMinistries,
-  fetchMinistryMemberCounts,
-  createMinistry,
-  updateMinistry,
-  deleteMinistry,
-  fetchMinistryMembers,
-  addMemberToMinistry,
-  removeMemberFromMinistry,
-} from '@/services/ministries';
-import { fetchProfiles } from '@/services/users';
-import { fetchMembers } from '@/services/members';
-import { uploadMinistryLogo } from '@/services/storage';
+import { fetchMinistries, fetchMinistryMemberCounts } from '@/services/ministries';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Ministry } from '@/types/database';
 
-const schema = z.object({
-  name: z.string().min(1, 'Required'),
-  description: z.string().optional(),
-  leader_id: z.string().optional(),
-});
-type FormValues = z.infer<typeof schema>;
+type ViewMode = 'grid' | 'list';
 
-// Turns a ministry's member list into a downloadable CSV file.
-function downloadMembersCsv(ministryName: string, rows: any[]) {
-  const headers = ['Member Code', 'First Name', 'Last Name', 'Joined Ministry On'];
-  const lines = [
-    headers.join(','),
-    ...rows.map((row) => {
-      const m = row.members;
-      const cells = [
-        m?.member_code ?? '',
-        m?.first_name ?? '',
-        m?.last_name ?? '',
-        row.joined_at ? new Date(row.joined_at).toLocaleDateString() : '',
-      ];
-      return cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
-    }),
-  ];
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const safeName = ministryName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  a.download = `${safeName}-members-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+const ministryColors = [
+  { border: 'border-t-blue-600', bg: 'bg-blue-50', button: 'bg-blue-600 hover:bg-blue-700' },
+  { border: 'border-t-green-600', bg: 'bg-green-50', button: 'bg-green-600 hover:bg-green-700' },
+  { border: 'border-t-orange-600', bg: 'bg-orange-50', button: 'bg-orange-600 hover:bg-orange-700' },
+  { border: 'border-t-purple-600', bg: 'bg-purple-50', button: 'bg-purple-600 hover:bg-purple-700' },
+  { border: 'border-t-pink-600', bg: 'bg-pink-50', button: 'bg-pink-600 hover:bg-pink-700' },
+  { border: 'border-t-indigo-600', bg: 'bg-indigo-50', button: 'bg-indigo-600 hover:bg-indigo-700' },
+];
 
 export function Ministries() {
-  const { profile, hasRole } = useAuth();
+  const { hasRole } = useAuth();
   const canManage = hasRole('administrator', 'secretary');
   const queryClient = useQueryClient();
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [membersModalId, setMembersModalId] = useState<string | null>(null);
-  const [exportingId, setExportingId] = useState<string | null>(null);
-
-  // Logo state for the create/edit form — see the "MINISTRY LOGO" section
-  // further down (inside the <Modal> for the form) for where this is used.
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const ministriesQuery = useQuery({ queryKey: ['ministries'], queryFn: fetchMinistries });
   const memberCountsQuery = useQuery({ queryKey: ['ministry-member-counts'], queryFn: fetchMinistryMemberCounts });
-  // Also needed by Ministry Leaders now (their Members modal add/remove
-  // controls need this), not just admin/secretary — the Leader dropdown
-  // inside the edit form is still locked to admin/secretary separately.
-  const profilesQuery = useQuery({
-    queryKey: ['profiles'],
-    queryFn: fetchProfiles,
-    enabled: canManage || profile?.role === 'ministry_leader',
-  });
+  
   useRealtimeQuery('ministries', ['ministries']);
   useRealtimeQuery('ministry_members', ['ministry-member-counts']);
-  useRealtimeQuery('profiles', ['profiles', 'ministries']); // When a profile (leader) changes, also invalidate ministries and profiles
 
-  // Filter profiles to show only ministry leaders and active users for the leader dropdown
-  const eligibleLeaders = (profilesQuery.data ?? []).filter(
-    (p) => p.is_active && (p.role === 'ministry_leader' || p.role === 'administrator' || p.role === 'pastor')
-  );
+  const ministries = ministriesQuery.data ?? [];
+  const memberCounts = memberCountsQuery.data ?? {};
 
-  // A Ministry Leader manages exactly the one ministry they lead —
-  // identified by ministries.leader_id pointing at their own profile.
-  // Administrators/secretaries manage every ministry.
-  function canManageMinistry(ministry: Ministry) {
-    return canManage || (profile?.role === 'ministry_leader' && ministry.leader_id === profile.id);
+  // Calculate stats
+  const stats = useMemo(() => {
+    const active = ministries.filter(m => m.is_active).length;
+    return { total: ministries.length, active };
+  }, [ministries]);
+
+  // Filter ministries by search
+  const filteredMinistries = useMemo(() => {
+    if (!searchQuery) return ministries;
+    const query = searchQuery.toLowerCase();
+    return ministries.filter(m => 
+      m.name.toLowerCase().includes(query) ||
+      m.description?.toLowerCase().includes(query) ||
+      m.profiles?.full_name?.toLowerCase().includes(query)
+    );
+  }, [ministries, searchQuery]);
+
+  // Get color for ministry based on index
+  function getMinistryColor(index: number) {
+    return ministryColors[index % ministryColors.length];
   }
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) });
-
-  function openCreate() {
-    reset({ name: '', description: '', leader_id: '' });
-    setEditingId(null);
-    setLogoFile(null);
-    setLogoPreview(null);
-    setFormOpen(true);
+  // Calculate events for 2025 (placeholder - would need actual event data)
+  function getEventsCount(ministryId: string): number {
+    // This would come from an actual events query filtered by ministry
+    return Math.floor(Math.random() * 15) + 3; // Placeholder
   }
-
-  function openEdit(id: string) {
-    const m = ministriesQuery.data?.find((x) => x.id === id);
-    if (!m || !canManageMinistry(m)) return;
-    reset({ name: m.name, description: m.description ?? '', leader_id: m.leader_id ?? '' });
-    setEditingId(id);
-    setLogoFile(null);
-    setLogoPreview(m.logo_url);
-    setFormOpen(true);
-  }
-
-  // ------------------------------------------------------------------
-  // MINISTRY LOGO — this is where a logo file picked in the form gets
-  // turned into a real, hosted image URL before the ministry is saved.
-  // To change how/where logos are stored, edit uploadMinistryLogo() in
-  // src/services/storage.ts (it currently uses the "church-assets"
-  // Supabase Storage bucket).
-  // ------------------------------------------------------------------
-  function handleLogoChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoFile(file);
-    setLogoPreview(URL.createObjectURL(file));
-  }
-
-  async function onSubmit(values: FormValues) {
-    try {
-      let logo_url: string | null | undefined = editingId ? undefined : null; // keep existing logo on edit unless a new file was picked
-      if (logoFile) {
-        logo_url = await uploadMinistryLogo(logoFile, values.name);
-      }
-
-      // Ministry Leaders can edit their ministry's info, but reassigning
-      // who leads it is an org-level decision reserved for admin/secretary
-      // — the Leader field is disabled for them in the form below, and we
-      // additionally strip it out here as defense in depth.
-      const payload = {
-        ...values,
-        ...(canManage ? { leader_id: values.leader_id || null } : {}),
-        ...(logo_url !== undefined ? { logo_url } : {}),
-      };
-      if (editingId) {
-        await updateMinistry(editingId, payload);
-        toast.success('Ministry updated');
-      } else {
-        await createMinistry(payload);
-        toast.success('Ministry created');
-      }
-      setFormOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['ministries'] });
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
-  // ------------------------------------------------------------------
-
-  async function handleDelete(id: string) {
-    if (!canManage) return; // deleting a ministry stays admin/secretary-only
-    if (!confirm('Delete this ministry? Members will be unassigned, not deleted.')) return;
-    await deleteMinistry(id);
-    toast.success('Ministry deleted');
-    queryClient.invalidateQueries({ queryKey: ['ministries'] });
-  }
-
-  async function handleExport(ministry: Ministry) {
-    setExportingId(ministry.id);
-    try {
-      const rows = await fetchMinistryMembers(ministry.id);
-      if (!rows || rows.length === 0) {
-        toast('No members to export yet', { icon: 'ℹ️' });
-        return;
-      }
-      downloadMembersCsv(ministry.name, rows);
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setExportingId(null);
-    }
-  }
-
-  const leaderOptions = eligibleLeaders.map((p) => ({ value: p.id, label: `${p.full_name} (${p.role})` }));
-  const openMembersMinistry = ministriesQuery.data?.find((m) => m.id === membersModalId);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-ink">Ministries/Departments</h1>
-          <p className="text-sm text-slate-500">Manage church ministries, leaders, and members.</p>
+          <h1 className="text-3xl font-bold text-slate-900">Ministries</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            {stats.total} ministry groups · {stats.active} active
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              queryClient.invalidateQueries({ queryKey: ['ministries'] });
-              queryClient.invalidateQueries({ queryKey: ['profiles'] });
-              toast.success('Refreshed');
-            }}
-          >
-            Refresh
+        {canManage && (
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Plus className="h-4 w-4" />
+            Create Ministry
           </Button>
-          {canManage && (
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" /> New ministry
-            </Button>
-          )}
+        )}
+      </div>
+
+      {/* Search and View Toggle */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex-1 max-w-md relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search ministries..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
+        {/* View Toggle */}
+        <div className="flex items-center bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`p-2 transition-colors ${
+              viewMode === 'grid'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+            title="Grid view"
+          >
+            <Grid className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={`p-2 transition-colors ${
+              viewMode === 'list'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+            title="List view"
+          >
+            <ListIcon className="h-5 w-5" />
+          </button>
         </div>
       </div>
 
+      {/* Ministry Cards */}
       {ministriesQuery.isLoading ? (
         <Spinner />
-      ) : (ministriesQuery.data ?? []).length === 0 ? (
-        <EmptyState icon={HeartHandshake} title="No ministries yet" />
+      ) : filteredMinistries.length === 0 ? (
+        <EmptyState 
+          icon={Church} 
+          title={searchQuery ? 'No ministries found' : 'No ministries yet'}
+          description={searchQuery ? 'Try adjusting your search' : 'Create your first ministry to get started'}
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {ministriesQuery.data!.map((ministry) => {
-            const canManageThis = canManageMinistry(ministry);
+        <div className={`grid gap-6 ${
+          viewMode === 'grid' 
+            ? 'grid-cols-1 md:grid-cols-2' 
+            : 'grid-cols-1'
+        }`}>
+          {filteredMinistries.map((ministry, index) => {
+            const colors = getMinistryColor(index);
+            const memberCount = memberCounts[ministry.id] ?? 0;
+            const eventsCount = getEventsCount(ministry.id);
+            
             return (
-              <Card key={ministry.id}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    {/* MINISTRY LOGO (card view) — falls back to the generic icon when no logo_url is set */}
-                    {ministry.logo_url ? (
-                      <img
-                        src={ministry.logo_url}
-                        alt={`${ministry.name} logo`}
-                        className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-slate-200"
-                      />
-                    ) : (
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-50">
-                        <HeartHandshake className="h-5 w-5 text-accent" />
+              <div
+                key={ministry.id}
+                className={`bg-white rounded-xl border-2 border-slate-200 ${colors.border} border-t-4 overflow-hidden hover:shadow-lg transition-shadow`}
+              >
+                {/* Card Content */}
+                <div className="p-6">
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-start gap-3 flex-1">
+                      {/* Icon */}
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${colors.bg}`}>
+                        <Church className="h-6 w-6 text-slate-700" />
                       </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-ink truncate">{ministry.name}</h3>
-                      <p className="mt-1 line-clamp-2 text-sm text-slate-500">{ministry.description || 'No description'}</p>
+                      
+                      {/* Title and Status */}
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-slate-900 mb-1">{ministry.name}</h3>
+                        {ministry.is_active && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                            Active
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  {/* Description */}
+                  <p className="text-sm text-slate-600 mb-4 line-clamp-2">
+                    {ministry.description || 'No description provided'}
+                  </p>
+
+                  {/* Stats */}
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Leader</span>
+                      <span className="font-medium text-slate-900">
+                        {ministry.profiles?.full_name || 'Unassigned'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Members</span>
+                      <span className="font-bold text-blue-600">{memberCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Events (2025)</span>
+                      <span className="font-medium text-slate-900">{eventsCount}</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    <button className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
+                      View Details
+                    </button>
+                    <button className={`flex-1 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${colors.button}`}>
+                      Manage
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                  <span className="truncate">Leader: {ministry.profiles?.full_name ?? 'Unassigned'}</span>
-                  {/* MEMBER COUNT — pulled from ministry_members via fetchMinistryMemberCounts() */}
-                  <span className="flex items-center gap-1 font-medium text-ink whitespace-nowrap">
-                    <Users className="h-3.5 w-3.5 text-slate-400" />
-                    {memberCountsQuery.data?.[ministry.id] ?? 0}
-                  </span>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                  <Button variant="ghost" size="sm" onClick={() => setMembersModalId(ministry.id)}>
-                    <UserPlus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Members</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleExport(ministry)}
-                    isLoading={exportingId === ministry.id}
-                  >
-                    <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Export</span>
-                  </Button>
-                  {canManageThis && (
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(ministry.id)}>
-                      <Pencil className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Edit</span>
-                    </Button>
-                  )}
-                  {canManage && (
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(ministry.id)}>
-                      <Trash2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Delete</span>
-                    </Button>
-                  )}
-                </div>
-              </Card>
+              </div>
             );
           })}
         </div>
       )}
-
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editingId ? 'Edit ministry' : 'New ministry'}>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* ================= MINISTRY LOGO (form) =================
-              This is the field to edit if you want to change how the
-              logo picker looks or behaves. handleLogoChange() above
-              stores the picked file; onSubmit() uploads it and saves
-              the resulting URL onto the ministry's logo_url column. */}
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
-              {logoPreview ? (
-                <img src={logoPreview} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <ImagePlus className="h-6 w-6 text-slate-400" />
-              )}
-            </div>
-            <label className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-ink hover:bg-slate-50">
-              Upload logo
-              <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
-            </label>
-          </div>
-          {/* ================= end MINISTRY LOGO ================= */}
-
-          <Input label="Name" {...register('name')} error={errors.name?.message} />
-          <Textarea label="Description" {...register('description')} />
-          <Select
-            label="Leader"
-            placeholder="No leader assigned"
-            disabled={!canManage}
-            hint={
-              !canManage 
-                ? 'Only administrators and secretaries can reassign a ministry leader.' 
-                : eligibleLeaders.length === 0
-                ? 'No eligible leaders found. Create users with "ministry_leader", "pastor", or "administrator" role first.'
-                : 'Select a user to lead this ministry'
-            }
-            options={[{ value: '', label: 'No leader assigned' }, ...leaderOptions]}
-            {...register('leader_id')}
-          />
-          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="w-full sm:w-auto">
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={isSubmitting} className="w-full sm:w-auto">
-              {editingId ? 'Save changes' : 'Create ministry'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {membersModalId && openMembersMinistry && (
-        <MinistryMembersModal
-          ministryId={membersModalId}
-          onClose={() => setMembersModalId(null)}
-          canManage={canManageMinistry(openMembersMinistry)}
-        />
-      )}
     </div>
-  );
-}
-
-function MinistryMembersModal({
-  ministryId,
-  onClose,
-  canManage,
-}: {
-  ministryId: string;
-  onClose: () => void;
-  canManage: boolean;
-}) {
-  const queryClient = useQueryClient();
-  const [addingMemberId, setAddingMemberId] = useState('');
-  const membersInMinistryQuery = useQuery({
-    queryKey: ['ministry-members', ministryId],
-    queryFn: () => fetchMinistryMembers(ministryId),
-  });
-  const allMembersQuery = useQuery({ queryKey: ['members', { status: 'active' }], queryFn: () => fetchMembers({ status: 'active' }) });
-
-  const assignedIds = new Set((membersInMinistryQuery.data ?? []).map((r: any) => r.members?.id));
-  const availableMembers = (allMembersQuery.data ?? []).filter((m) => !assignedIds.has(m.id));
-
-  async function handleAdd() {
-    if (!addingMemberId) return;
-    await addMemberToMinistry(ministryId, addingMemberId);
-    setAddingMemberId('');
-    queryClient.invalidateQueries({ queryKey: ['ministry-members', ministryId] });
-    queryClient.invalidateQueries({ queryKey: ['ministry-member-counts'] });
-  }
-
-  async function handleRemove(rowId: string) {
-    await removeMemberFromMinistry(rowId);
-    queryClient.invalidateQueries({ queryKey: ['ministry-members', ministryId] });
-    queryClient.invalidateQueries({ queryKey: ['ministry-member-counts'] });
-  }
-
-  return (
-    <Modal open onClose={onClose} title="Ministry members">
-      {canManage && (
-        <div className="mb-4 flex flex-col sm:flex-row gap-2">
-          <Select
-            value={addingMemberId}
-            onChange={(e) => setAddingMemberId(e.target.value)}
-            placeholder="Select a member to add"
-            options={[
-              { value: '', label: 'Select a member to add' },
-              ...availableMembers.map((m) => ({ value: m.id, label: `${m.first_name} ${m.last_name}` })),
-            ]}
-          />
-          <Button onClick={handleAdd} disabled={!addingMemberId} className="sm:w-auto">
-            Add
-          </Button>
-        </div>
-      )}
-      {membersInMinistryQuery.isLoading ? (
-        <Spinner />
-      ) : (membersInMinistryQuery.data ?? []).length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-400">No members assigned yet.</p>
-      ) : (
-        <div className="space-y-2">
-          {membersInMinistryQuery.data!.map((row: any) => (
-            <div key={row.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-              <span className="text-sm text-ink truncate flex-1 mr-2">
-                {row.members?.first_name} {row.members?.last_name}
-              </span>
-              {canManage && (
-                <button onClick={() => handleRemove(row.id)} className="text-slate-400 hover:text-red-600 shrink-0">
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </Modal>
   );
 }

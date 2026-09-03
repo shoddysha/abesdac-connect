@@ -5,7 +5,7 @@ import { useState, type ChangeEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { KeyRound, User, Database, Bell, Clock, Shield, Palette, Download, Mail } from 'lucide-react';
+import { KeyRound, User, Database, Bell, Clock, Shield, Download, Mail, Building2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -15,7 +15,6 @@ import { uploadAvatar } from '@/services/storage';
 import { generateFullBackup, downloadBackupFile } from '@/services/backup';
 import { RestoreBackupModal } from '@/features/backup/RestoreBackupModal';
 import { supabase } from '@/lib/supabase';
-
 
 const profileSchema = z.object({
   full_name: z.string().min(1, 'Required'),
@@ -37,56 +36,32 @@ const emailSchema = z.object({
 }).refine((d) => d.email === d.confirmEmail, { message: 'Emails do not match', path: ['confirmEmail'] });
 type EmailValues = z.infer<typeof emailSchema>;
 
+type TabType = 'church' | 'profile' | 'notifications' | 'security' | 'backup';
+
 export function Settings() {
   const { profile, hasRole, updatePassword, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  const [activeTab, setActiveTab] = useState<TabType>('church');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url ?? null);
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
 
-  // Notification preferences — stored in localStorage per user
+  // Notification preferences
   const [notificationPrefs, setNotificationPrefs] = useState(() => {
     const saved = profile?.id ? localStorage.getItem(`notif_prefs_${profile.id}`) : null;
     return saved ? JSON.parse(saved) : {
       task_assigned: true,
-      task_completed: true,
       report_due: true,
-      report_submitted: true,
       event_reminder: true,
       birthday_reminder: true,
       member_followup: true,
-      ministry_update: true,
     };
   });
 
-  // Display preferences — stored in localStorage
-  const [displayPrefs, setDisplayPrefs] = useState(() => {
-    const saved = localStorage.getItem('display_preferences');
-    return saved ? JSON.parse(saved) : {
-      theme: 'light',
-      items_per_page: 10,
-      date_format: 'MMM d, yyyy',
-    };
-  });
-  
-  // Legacy localStorage settings for backward compatibility (admin only)
-  const [birthdaySmsEnabled, setBirthdaySmsEnabled] = useState(() => {
-    const saved = localStorage.getItem('notif_birthday_sms');
-    return saved ? saved === 'true' : true;
-  });
-  const [eventRemindersEnabled, setEventRemindersEnabled] = useState(() => {
-    const saved = localStorage.getItem('notif_event_reminders');
-    return saved ? saved === 'true' : true;
-  });
-  const [weeklyReportsEnabled, setWeeklyReportsEnabled] = useState(() => {
-    const saved = localStorage.getItem('notif_weekly_reports');
-    return saved ? saved === 'true' : false;
-  });
-  
-  // Session timeout state (load from localStorage, default 15 minutes)
+  // Session timeout
   const [idleTimeout, setIdleTimeout] = useState(() => {
     const saved = localStorage.getItem('idle_timeout_minutes');
     return saved || '15';
@@ -105,7 +80,6 @@ export function Settings() {
   });
 
   const passwordForm = useForm<PasswordValues>({ resolver: zodResolver(passwordSchema) });
-
   const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) });
 
   async function onProfileSubmit(values: ProfileValues) {
@@ -139,8 +113,7 @@ export function Settings() {
     try {
       const { error } = await supabase.auth.updateUser({ email: values.email });
       if (error) throw error;
-      
-      toast.success('Verification email sent! Please check your inbox and confirm your new email address.');
+      toast.success('Verification email sent! Please check your inbox.');
       emailForm.reset();
     } catch (err) {
       toast.error((err as Error).message);
@@ -160,26 +133,6 @@ export function Settings() {
     }
   }
 
-  function handleNotificationToggle(setting: 'birthday' | 'event' | 'weekly', value: boolean) {
-    switch (setting) {
-      case 'birthday':
-        setBirthdaySmsEnabled(value);
-        localStorage.setItem('notif_birthday_sms', String(value));
-        toast.success(value ? 'Birthday SMS enabled' : 'Birthday SMS disabled');
-        break;
-      case 'event':
-        setEventRemindersEnabled(value);
-        localStorage.setItem('notif_event_reminders', String(value));
-        toast.success(value ? 'Event reminders enabled' : 'Event reminders disabled');
-        break;
-      case 'weekly':
-        setWeeklyReportsEnabled(value);
-        localStorage.setItem('notif_weekly_reports', String(value));
-        toast.success(value ? 'Weekly reports enabled' : 'Weekly reports disabled');
-        break;
-    }
-  }
-
   function handleTimeoutUpdate() {
     const timeout = parseInt(idleTimeout);
     if (isNaN(timeout) || timeout < 1) {
@@ -187,7 +140,7 @@ export function Settings() {
       return;
     }
     localStorage.setItem('idle_timeout_minutes', String(timeout));
-    toast.success(`Session timeout updated to ${timeout} minutes. Changes take effect on next login.`);
+    toast.success(`Session timeout updated to ${timeout} minutes`);
   }
 
   function updateNotificationPreference(key: string, value: boolean) {
@@ -200,380 +153,355 @@ export function Settings() {
       toast.success('Notification preference updated');
     } catch (err) {
       toast.error((err as Error).message);
-      setNotificationPrefs(notificationPrefs);
     }
   }
 
-  function updateDisplayPreference(key: string, value: any) {
-    const updated = { ...displayPrefs, [key]: value };
-    setDisplayPrefs(updated);
-    try {
-      localStorage.setItem('display_preferences', JSON.stringify(updated));
-      toast.success('Display preference updated');
-    } catch (err) {
-      toast.error((err as Error).message);
-      setDisplayPrefs(displayPrefs);
-    }
-  }
-
-  async function downloadMyData() {
-    if (!profile?.id) return;
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', profile.id)
-        .single();
-      
-      if (error) throw error;
-      
-      const dataStr = JSON.stringify(data, null, 2);
-      const blob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `my-profile-data-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success('Profile data downloaded');
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
-
-  function viewAuditLogs() {
-    navigate('/audit-logs');
-  }
-
-  function manageUserRoles() {
-    navigate('/users');
-  }
+  const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
+    { id: 'church', label: 'Church Info', icon: <Building2 className="h-4 w-4" /> },
+    { id: 'profile', label: 'Profile', icon: <User className="h-4 w-4" /> },
+    { id: 'notifications', label: 'Notifications', icon: <Bell className="h-4 w-4" /> },
+    { id: 'security', label: 'Security', icon: <Shield className="h-4 w-4" /> },
+    { id: 'backup', label: 'Backup', icon: <Database className="h-4 w-4" /> },
+  ];
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-ink">Settings</h1>
-        <p className="text-sm text-slate-500">Manage your account and app information.</p>
+        <h1 className="text-3xl font-bold text-slate-900">Settings</h1>
+        <p className="text-sm text-slate-500 mt-1">Manage church system preferences and configuration</p>
       </div>
 
-      <Card>
-        <CardHeader title="Your profile" action={<User className="h-4 w-4 text-slate-400" />} />
-        <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-slate-100">
-              {avatarPreview ? (
-                <img src={avatarPreview} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <User className="h-6 w-6 text-slate-400" />
-              )}
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-slate-200 overflow-x-auto">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Church Info Tab */}
+      {activeTab === 'church' && (
+        <div className="space-y-6">
+          <Card className="bg-white">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Church Information</h2>
+              <p className="text-sm text-slate-500 mt-1">Basic information about Abeka SDA Church</p>
             </div>
-            <label className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-ink hover:bg-slate-50">
-              Upload photo
-              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-            </label>
-          </div>
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Church Name</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="Abeka Seventh-Day Adventist Church"
+                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Church Code</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="GH-ABEKA-001"
+                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Pastor</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="Pastor Emmanuel Asare"
+                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Head Elder</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="Elder Kofi Mensah"
+                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Established</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="1985"
+                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Conference</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="Ghana Union Conference"
+                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
+                  />
+                </div>
+              </div>
+            </div>
+          </Card>
 
-          <Input label="Full name" {...profileForm.register('full_name')} error={profileForm.formState.errors.full_name?.message} />
-          <Input label="Phone" {...profileForm.register('phone')} />
-          <Input label="Current email" value={profile?.email ?? ''} disabled />
-          <Input label="Role" value={profile?.role.replace('_', ' ') ?? ''} disabled />
-          <Button type="submit" isLoading={profileForm.formState.isSubmitting}>
-            Save changes
-          </Button>
-        </form>
-      </Card>
+          {/* System Version */}
+          <Card className="flex items-center gap-3 bg-white">
+            <img src="/abeka.png" alt="Abeka SDA Church logo" className="h-10 w-10 rounded-md object-contain" />
+            <div>
+              <p className="text-sm font-semibold text-slate-900">ABESDAC_Connect</p>
+              <p className="text-xs text-slate-500">Church management system for Abeka SDA Church · v4.1.0</p>
+            </div>
+          </Card>
+        </div>
+      )}
 
-      <Card>
-        <CardHeader title="Change email" action={<Mail className="h-4 w-4 text-slate-400" />} />
-        <p className="mb-4 text-sm text-slate-500">
-          Update your email address. You'll need to verify the new email before the change takes effect.
-        </p>
-        <form onSubmit={emailForm.handleSubmit(onEmailSubmit)} className="space-y-4">
-          <Input 
-            label="New email" 
-            type="email" 
-            {...emailForm.register('email')} 
-            error={emailForm.formState.errors.email?.message} 
-            placeholder="your.new.email@example.com"
-          />
-          <Input
-            label="Confirm new email"
-            type="email"
-            {...emailForm.register('confirmEmail')}
-            error={emailForm.formState.errors.confirmEmail?.message}
-            placeholder="your.new.email@example.com"
-          />
-          <Button type="submit" isLoading={emailForm.formState.isSubmitting}>
-            Update email
-          </Button>
-        </form>
-      </Card>
+      {/* Profile Tab */}
+      {activeTab === 'profile' && (
+        <div className="space-y-6">
+          <Card className="bg-white">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Your Profile</h2>
+              <p className="text-sm text-slate-500 mt-1">Update your personal information and avatar</p>
+            </div>
+            <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="p-6 space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-slate-100 border-2 border-slate-200">
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <User className="h-8 w-8 text-slate-400" />
+                  )}
+                </div>
+                <div>
+                  <label className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
+                    Upload photo
+                    <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+                  </label>
+                  <p className="text-xs text-slate-500 mt-2">JPG, PNG or GIF. Max size 2MB</p>
+                </div>
+              </div>
 
-      <Card>
-        <CardHeader title="Change password" action={<KeyRound className="h-4 w-4 text-slate-400" />} />
-        <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
-          <Input label="New password" type="password" {...passwordForm.register('password')} error={passwordForm.formState.errors.password?.message} />
-          <Input
-            label="Confirm new password"
-            type="password"
-            {...passwordForm.register('confirmPassword')}
-            error={passwordForm.formState.errors.confirmPassword?.message}
-          />
-          <Button type="submit" isLoading={passwordForm.formState.isSubmitting}>
-            Update password
-          </Button>
-        </form>
-      </Card>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Input 
+                  label="Full name" 
+                  {...profileForm.register('full_name')} 
+                  error={profileForm.formState.errors.full_name?.message} 
+                />
+                <Input label="Phone" {...profileForm.register('phone')} />
+                <Input label="Email address" value={profile?.email ?? ''} disabled />
+                <Input label="Role" value={profile?.role.replace('_', ' ') ?? ''} disabled />
+              </div>
+
+              <Button type="submit" isLoading={profileForm.formState.isSubmitting}>
+                Save changes
+              </Button>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* Notifications Tab */}
+      {activeTab === 'notifications' && (
+        <div className="space-y-6">
+          <Card className="bg-white">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Notification Preferences</h2>
+              <p className="text-sm text-slate-500 mt-1">Choose which notifications you want to receive</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {hasRole('ministry_leader') && (
+                <>
+                  <label className="flex items-center justify-between cursor-pointer group p-4 rounded-lg hover:bg-slate-50 transition-colors">
+                    <div>
+                      <span className="text-sm text-slate-900 font-medium">Task assignments</span>
+                      <p className="text-xs text-slate-500 mt-0.5">Get notified when you're assigned a task</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      checked={notificationPrefs.task_assigned}
+                      onChange={(e) => updateNotificationPreference('task_assigned', e.target.checked)}
+                    />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer group p-4 rounded-lg hover:bg-slate-50 transition-colors">
+                    <div>
+                      <span className="text-sm text-slate-900 font-medium">Report due reminders</span>
+                      <p className="text-xs text-slate-500 mt-0.5">Remind me when reports are due</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      checked={notificationPrefs.report_due}
+                      onChange={(e) => updateNotificationPreference('report_due', e.target.checked)}
+                    />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer group p-4 rounded-lg hover:bg-slate-50 transition-colors">
+                    <div>
+                      <span className="text-sm text-slate-900 font-medium">Member follow-ups</span>
+                      <p className="text-xs text-slate-500 mt-0.5">Notify when follow-ups are due</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      checked={notificationPrefs.member_followup}
+                      onChange={(e) => updateNotificationPreference('member_followup', e.target.checked)}
+                    />
+                  </label>
+                </>
+              )}
+              <label className="flex items-center justify-between cursor-pointer group p-4 rounded-lg hover:bg-slate-50 transition-colors">
+                <div>
+                  <span className="text-sm text-slate-900 font-medium">Event reminders</span>
+                  <p className="text-xs text-slate-500 mt-0.5">Get notified about upcoming events</p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  checked={notificationPrefs.event_reminder}
+                  onChange={(e) => updateNotificationPreference('event_reminder', e.target.checked)}
+                />
+              </label>
+              <label className="flex items-center justify-between cursor-pointer group p-4 rounded-lg hover:bg-slate-50 transition-colors">
+                <div>
+                  <span className="text-sm text-slate-900 font-medium">Birthday reminders</span>
+                  <p className="text-xs text-slate-500 mt-0.5">Get notified about member birthdays</p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  checked={notificationPrefs.birthday_reminder}
+                  onChange={(e) => updateNotificationPreference('birthday_reminder', e.target.checked)}
+                />
+              </label>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Security Tab */}
+      {activeTab === 'security' && (
+        <div className="space-y-6">
+          <Card className="bg-white">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Change Email</h2>
+              <p className="text-sm text-slate-500 mt-1">Update your email address</p>
+            </div>
+            <form onSubmit={emailForm.handleSubmit(onEmailSubmit)} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Input
+                  label="New email"
+                  type="email"
+                  {...emailForm.register('email')}
+                  error={emailForm.formState.errors.email?.message}
+                  placeholder="your.new.email@example.com"
+                />
+                <Input
+                  label="Confirm new email"
+                  type="email"
+                  {...emailForm.register('confirmEmail')}
+                  error={emailForm.formState.errors.confirmEmail?.message}
+                  placeholder="your.new.email@example.com"
+                />
+              </div>
+              <Button type="submit" isLoading={emailForm.formState.isSubmitting}>
+                Update email
+              </Button>
+            </form>
+          </Card>
+
+          <Card className="bg-white">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Change Password</h2>
+              <p className="text-sm text-slate-500 mt-1">Update your account password</p>
+            </div>
+            <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Input
+                  label="New password"
+                  type="password"
+                  {...passwordForm.register('password')}
+                  error={passwordForm.formState.errors.password?.message}
+                />
+                <Input
+                  label="Confirm new password"
+                  type="password"
+                  {...passwordForm.register('confirmPassword')}
+                  error={passwordForm.formState.errors.confirmPassword?.message}
+                />
+              </div>
+              <Button type="submit" isLoading={passwordForm.formState.isSubmitting}>
+                Update password
+              </Button>
+            </form>
+          </Card>
+
+          {hasRole('administrator') && (
+            <Card className="bg-white">
+              <div className="border-b border-slate-100 px-6 py-4">
+                <h2 className="text-lg font-semibold text-slate-900">Session Timeout</h2>
+                <p className="text-sm text-slate-500 mt-1">Auto-logout after inactivity</p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                  <div className="flex-1 max-w-xs">
+                    <Input
+                      type="number"
+                      label="Idle timeout (minutes)"
+                      value={idleTimeout}
+                      onChange={(e) => setIdleTimeout(e.target.value)}
+                      hint="Minimum 1 minute, recommended 15 minutes"
+                    />
+                  </div>
+                  <Button onClick={handleTimeoutUpdate}>Update timeout</Button>
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Backup Tab */}
+      {activeTab === 'backup' && hasRole('administrator', 'secretary') && (
+        <div className="space-y-6">
+          <Card className="bg-white">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Backup & Restore</h2>
+              <p className="text-sm text-slate-500 mt-1">Download complete system backup or restore from file</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600">
+                Download a complete snapshot of every member, ministry, attendance record, event, announcement, user, and
+                audit log as one JSON file.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={handleBackup} isLoading={backupLoading}>
+                  <Download className="h-4 w-4" />
+                  Download full backup
+                </Button>
+                <Button variant="outline" onClick={() => setRestoreOpen(true)}>
+                  Restore from backup
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       <RestoreBackupModal open={restoreOpen} onClose={() => setRestoreOpen(false)} />
-
-      {/* Notification Preferences - Available to all users */}
-      <Card>
-        <CardHeader title="Notification preferences" action={<Bell className="h-4 w-4 text-slate-400" />} />
-        <p className="mb-4 text-sm text-slate-500">
-          Choose which notifications you want to receive
-        </p>
-        <div className="space-y-3">
-          {hasRole('ministry_leader') && (
-            <>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <div>
-                  <span className="text-sm text-ink font-medium">Task assignments</span>
-                  <p className="text-xs text-slate-500">Get notified when you're assigned a task</p>
-                </div>
-                <input 
-                  type="checkbox" 
-                  className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
-                  checked={notificationPrefs.task_assigned}
-                  onChange={(e) => updateNotificationPreference('task_assigned', e.target.checked)}
-                />
-              </label>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <div>
-                  <span className="text-sm text-ink font-medium">Task completions</span>
-                  <p className="text-xs text-slate-500">Get notified when tasks are completed</p>
-                </div>
-                <input 
-                  type="checkbox" 
-                  className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
-                  checked={notificationPrefs.task_completed}
-                  onChange={(e) => updateNotificationPreference('task_completed', e.target.checked)}
-                />
-              </label>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <div>
-                  <span className="text-sm text-ink font-medium">Report due reminders</span>
-                  <p className="text-xs text-slate-500">Remind me when reports are due</p>
-                </div>
-                <input 
-                  type="checkbox" 
-                  className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
-                  checked={notificationPrefs.report_due}
-                  onChange={(e) => updateNotificationPreference('report_due', e.target.checked)}
-                />
-              </label>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <div>
-                  <span className="text-sm text-ink font-medium">Member follow-ups</span>
-                  <p className="text-xs text-slate-500">Notify when follow-ups are due</p>
-                </div>
-                <input 
-                  type="checkbox" 
-                  className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
-                  checked={notificationPrefs.member_followup}
-                  onChange={(e) => updateNotificationPreference('member_followup', e.target.checked)}
-                />
-              </label>
-            </>
-          )}
-          <label className="flex items-center justify-between cursor-pointer group">
-            <div>
-              <span className="text-sm text-ink font-medium">Event reminders</span>
-              <p className="text-xs text-slate-500">Get notified about upcoming events</p>
-            </div>
-            <input 
-              type="checkbox" 
-              className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
-              checked={notificationPrefs.event_reminder}
-              onChange={(e) => updateNotificationPreference('event_reminder', e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center justify-between cursor-pointer group">
-            <div>
-              <span className="text-sm text-ink font-medium">Birthday reminders</span>
-              <p className="text-xs text-slate-500">Get notified about member birthdays</p>
-            </div>
-            <input 
-              type="checkbox" 
-              className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
-              checked={notificationPrefs.birthday_reminder}
-              onChange={(e) => updateNotificationPreference('birthday_reminder', e.target.checked)}
-            />
-          </label>
-          {hasRole('administrator', 'secretary', 'ministry_leader') && (
-            <label className="flex items-center justify-between cursor-pointer group">
-              <div>
-                <span className="text-sm text-ink font-medium">Ministry updates</span>
-                <p className="text-xs text-slate-500">Get notified about ministry changes</p>
-              </div>
-              <input 
-                type="checkbox" 
-                className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
-                checked={notificationPrefs.ministry_update}
-                onChange={(e) => updateNotificationPreference('ministry_update', e.target.checked)}
-              />
-            </label>
-          )}
-        </div>
-      </Card>
-
-      {/* Display Preferences - Available to all users */}
-      <Card>
-        <CardHeader title="Display preferences" action={<Palette className="h-4 w-4 text-slate-400" />} />
-        <p className="mb-4 text-sm text-slate-500">
-          Customize how information is displayed
-        </p>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-ink mb-2">Items per page</label>
-            <select
-              value={displayPrefs.items_per_page}
-              onChange={(e) => updateDisplayPreference('items_per_page', parseInt(e.target.value))}
-              className="w-full sm:w-auto px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-secondary focus:ring-2 focus:ring-secondary-50 bg-white"
-            >
-              <option value={5}>5 items</option>
-              <option value={10}>10 items</option>
-              <option value={25}>25 items</option>
-              <option value={50}>50 items</option>
-              <option value={100}>100 items</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink mb-2">Date format</label>
-            <select
-              value={displayPrefs.date_format}
-              onChange={(e) => updateDisplayPreference('date_format', e.target.value)}
-              className="w-full sm:w-auto px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-secondary focus:ring-2 focus:ring-secondary-50 bg-white"
-            >
-              <option value="MMM d, yyyy">Jan 15, 2024</option>
-              <option value="dd/MM/yyyy">15/01/2024</option>
-              <option value="MM/dd/yyyy">01/15/2024</option>
-              <option value="yyyy-MM-dd">2024-01-15</option>
-            </select>
-          </div>
-        </div>
-      </Card>
-
-      {/* Data & Privacy - Available to all users */}
-      <Card>
-        <CardHeader title="Data & privacy" action={<Download className="h-4 w-4 text-slate-400" />} />
-        <p className="mb-4 text-sm text-slate-500">
-          Download your personal data and manage privacy settings
-        </p>
-        <Button variant="outline" onClick={downloadMyData}>
-          Download my data
-        </Button>
-      </Card>
-
-      {hasRole('administrator', 'secretary') && (
-        <Card>
-          <CardHeader title="Backup & Restore" action={<Database className="h-4 w-4 text-slate-400" />} />
-          <p className="mb-4 text-sm text-slate-500">
-            Download a complete snapshot of every member, ministry, attendance record, event, announcement, user, and
-            audit log as one JSON file — useful to keep a periodic copy outside the app.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleBackup} isLoading={backupLoading}>
-              Download full backup
-            </Button>
-            <Button variant="outline" onClick={() => setRestoreOpen(true)}>
-              Restore from backup
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {hasRole('administrator') && (
-        <Card>
-          <CardHeader title="System notifications" action={<Bell className="h-4 w-4 text-slate-400" />} />
-          <p className="mb-4 text-sm text-slate-500">
-            Configure automated reminders and notifications for birthdays, events, and follow-ups.
-          </p>
-          <div className="space-y-3">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
-                checked={birthdaySmsEnabled}
-                onChange={(e) => handleNotificationToggle('birthday', e.target.checked)}
-              />
-              <span className="text-sm text-ink">Send birthday SMS to members automatically</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
-                checked={eventRemindersEnabled}
-                onChange={(e) => handleNotificationToggle('event', e.target.checked)}
-              />
-              <span className="text-sm text-ink">Event reminder notifications (24 hours before)</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary" 
-                checked={weeklyReportsEnabled}
-                onChange={(e) => handleNotificationToggle('weekly', e.target.checked)}
-              />
-              <span className="text-sm text-ink">Weekly attendance summary reports</span>
-            </label>
-          </div>
-        </Card>
-      )}
-
-      {hasRole('administrator') && (
-        <Card>
-          <CardHeader title="Session timeout" action={<Clock className="h-4 w-4 text-slate-400" />} />
-          <p className="mb-4 text-sm text-slate-500">
-            Automatically log out users after a period of inactivity for security.
-          </p>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <div className="flex-1 max-w-xs">
-              <Input
-                type="number"
-                label="Idle timeout (minutes)"
-                value={idleTimeout}
-                onChange={(e) => setIdleTimeout(e.target.value)}
-                hint="Minimum 1 minute, recommended 15 minutes"
-              />
-            </div>
-            <Button onClick={handleTimeoutUpdate}>Update timeout</Button>
-          </div>
-        </Card>
-      )}
-
-      {hasRole('administrator', 'secretary') && (
-        <Card>
-          <CardHeader title="Audit & security" action={<Shield className="h-4 w-4 text-slate-400" />} />
-          <p className="mb-4 text-sm text-slate-500">
-            View security logs, manage user permissions, and configure data retention policies.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={viewAuditLogs}>View audit logs</Button>
-            {hasRole('administrator') && (
-              <Button variant="outline" onClick={manageUserRoles}>Manage user roles</Button>
-            )}
-          </div>
-        </Card>
-      )}
-
-      <Card className="flex items-center gap-3">
-        <img src="/abeka.png" alt="Abeka SDA Church logo" className="h-8 w-8 rounded-md object-contain" />
-        <div>
-          <p className="text-sm font-medium text-ink">ABESDAC_Connect</p>
-          <p className="text-xs text-slate-500">Church management system for Abeka SDA Church · v4.1.0</p>
-        </div>
-      </Card>
     </div>
   );
 }
