@@ -37,6 +37,20 @@ const emailSchema = z.object({
 }).refine((d) => d.email === d.confirmEmail, { message: 'Emails do not match', path: ['confirmEmail'] });
 type EmailValues = z.infer<typeof emailSchema>;
 
+const churchSettingsSchema = z.object({
+  church_name: z.string().min(1, 'Required'),
+  church_code: z.string().min(1, 'Required'),
+  pastor_name: z.string().optional(),
+  head_elder_name: z.string().optional(),
+  established_year: z.string().optional(),
+  conference: z.string().optional(),
+  address: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().email().optional().or(z.literal('')),
+  website: z.string().optional(),
+});
+type ChurchSettingsValues = z.infer<typeof churchSettingsSchema>;
+
 type TabType = 'church' | 'profile' | 'notifications' | 'security' | 'backup';
 
 export function Settings() {
@@ -49,6 +63,22 @@ export function Settings() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url ?? null);
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
+  const [churchEditMode, setChurchEditMode] = useState(false);
+
+  // Fetch church settings
+  const churchSettingsQuery = useQuery({
+    queryKey: ['church-settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('church_settings')
+        .select('*')
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  useRealtimeQuery('church_settings', ['church-settings']);
 
   // Fetch user preferences from database with real-time updates
   const preferencesQuery = useQuery({
@@ -114,6 +144,18 @@ export function Settings() {
 
   const passwordForm = useForm<PasswordValues>({ resolver: zodResolver(passwordSchema) });
   const emailForm = useForm<EmailValues>({ resolver: zodResolver(emailSchema) });
+  
+  const churchSettingsForm = useForm<ChurchSettingsValues>({
+    resolver: zodResolver(churchSettingsSchema),
+    defaultValues: churchSettingsQuery.data || {},
+  });
+
+  // Update church form when data loads
+  useEffect(() => {
+    if (churchSettingsQuery.data) {
+      churchSettingsForm.reset(churchSettingsQuery.data);
+    }
+  }, [churchSettingsQuery.data]);
 
   async function onProfileSubmit(values: ProfileValues) {
     if (!profile) return;
@@ -247,6 +289,31 @@ export function Settings() {
     navigate('/audit-logs');
   }
 
+  async function onChurchSettingsSubmit(values: ChurchSettingsValues) {
+    if (!hasRole('administrator')) {
+      toast.error('Only administrators can update church settings');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('church_settings')
+        .update({
+          ...values,
+          updated_by: profile?.id,
+        })
+        .eq('id', churchSettingsQuery.data?.id);
+
+      if (error) throw error;
+
+      toast.success('Church settings updated successfully');
+      setChurchEditMode(false);
+      queryClient.invalidateQueries({ queryKey: ['church-settings'] });
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'church', label: 'Church Info', icon: <Building2 className="h-4 w-4" /> },
     { id: 'profile', label: 'Profile', icon: <User className="h-4 w-4" /> },
@@ -285,68 +352,180 @@ export function Settings() {
       {activeTab === 'church' && (
         <div className="space-y-6">
           <Card className="bg-white">
-            <div className="border-b border-slate-100 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">Church Information</h2>
-              <p className="text-sm text-slate-500 mt-1">Basic information about Abeka SDA Church</p>
+            <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Church Information</h2>
+                <p className="text-sm text-slate-500 mt-1">Basic information about your church</p>
+              </div>
+              {hasRole('administrator') && !churchEditMode && (
+                <Button
+                  variant="outline"
+                  onClick={() => setChurchEditMode(true)}
+                  className="text-sm"
+                >
+                  Edit
+                </Button>
+              )}
             </div>
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Church Name</label>
-                  <input
-                    type="text"
-                    disabled
-                    value="Abeka Seventh-Day Adventist Church"
-                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Church Code</label>
-                  <input
-                    type="text"
-                    disabled
-                    value="GH-ABEKA-001"
-                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Pastor</label>
-                  <input
-                    type="text"
-                    disabled
-                    value="Pastor Emmanuel Asare"
-                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Head Elder</label>
-                  <input
-                    type="text"
-                    disabled
-                    value="Elder Kofi Mensah"
-                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Established</label>
-                  <input
-                    type="text"
-                    disabled
-                    value="1985"
-                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Conference</label>
-                  <input
-                    type="text"
-                    disabled
-                    value="Ghana Union Conference"
-                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900"
-                  />
+            
+            {churchSettingsQuery.isLoading ? (
+              <div className="p-6">
+                <div className="animate-pulse space-y-4">
+                  <div className="h-10 bg-slate-200 rounded"></div>
+                  <div className="h-10 bg-slate-200 rounded"></div>
                 </div>
               </div>
-            </div>
+            ) : churchEditMode ? (
+              <form onSubmit={churchSettingsForm.handleSubmit(onChurchSettingsSubmit)} className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input
+                    label="Church Name"
+                    {...churchSettingsForm.register('church_name')}
+                    error={churchSettingsForm.formState.errors.church_name?.message}
+                  />
+                  <Input
+                    label="Church Code"
+                    {...churchSettingsForm.register('church_code')}
+                    error={churchSettingsForm.formState.errors.church_code?.message}
+                  />
+                  <Input
+                    label="Pastor"
+                    {...churchSettingsForm.register('pastor_name')}
+                    placeholder="e.g., Pastor Emmanuel Asare"
+                  />
+                  <Input
+                    label="Head Elder"
+                    {...churchSettingsForm.register('head_elder_name')}
+                    placeholder="e.g., Elder Kofi Mensah"
+                  />
+                  <Input
+                    label="Established Year"
+                    {...churchSettingsForm.register('established_year')}
+                    placeholder="e.g., 1985"
+                  />
+                  <Input
+                    label="Conference"
+                    {...churchSettingsForm.register('conference')}
+                    placeholder="e.g., Ghana Union Conference"
+                  />
+                  <Input
+                    label="Church Phone"
+                    {...churchSettingsForm.register('phone')}
+                    placeholder="e.g., +233 XXX XXX XXX"
+                  />
+                  <Input
+                    label="Church Email"
+                    type="email"
+                    {...churchSettingsForm.register('email')}
+                    error={churchSettingsForm.formState.errors.email?.message}
+                    placeholder="e.g., info@abekasda.org"
+                  />
+                  <Input
+                    label="Website"
+                    {...churchSettingsForm.register('website')}
+                    placeholder="e.g., https://abekasda.org"
+                  />
+                  <div className="md:col-span-2">
+                    <Input
+                      label="Church Address"
+                      {...churchSettingsForm.register('address')}
+                      placeholder="e.g., Abeka Lapaz, Accra, Ghana"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-slate-200">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setChurchEditMode(false);
+                      churchSettingsForm.reset(churchSettingsQuery.data);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" isLoading={churchSettingsForm.formState.isSubmitting}>
+                    Save Changes
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Church Name</label>
+                    <div className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900">
+                      {churchSettingsQuery.data?.church_name || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Church Code</label>
+                    <div className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900">
+                      {churchSettingsQuery.data?.church_code || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Pastor</label>
+                    <div className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900">
+                      {churchSettingsQuery.data?.pastor_name || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Head Elder</label>
+                    <div className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900">
+                      {churchSettingsQuery.data?.head_elder_name || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Established</label>
+                    <div className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900">
+                      {churchSettingsQuery.data?.established_year || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Conference</label>
+                    <div className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900">
+                      {churchSettingsQuery.data?.conference || '—'}
+                    </div>
+                  </div>
+                  {churchSettingsQuery.data?.phone && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Church Phone</label>
+                      <div className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900">
+                        {churchSettingsQuery.data.phone}
+                      </div>
+                    </div>
+                  )}
+                  {churchSettingsQuery.data?.email && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Church Email</label>
+                      <div className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900">
+                        {churchSettingsQuery.data.email}
+                      </div>
+                    </div>
+                  )}
+                  {churchSettingsQuery.data?.website && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Website</label>
+                      <div className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900">
+                        <a href={churchSettingsQuery.data.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                          {churchSettingsQuery.data.website}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                  {churchSettingsQuery.data?.address && (
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Church Address</label>
+                      <div className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-900">
+                        {churchSettingsQuery.data.address}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </Card>
 
           {/* System Version */}

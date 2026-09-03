@@ -1,10 +1,27 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ChangeEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Grid, List as ListIcon, Church, Users, Calendar, TrendingUp } from 'lucide-react';
+import { Plus, Search, Grid, List as ListIcon, Church, Users, Calendar, TrendingUp, Pencil, Trash2, UserPlus, X, ImagePlus, Download } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Input, Select, Textarea } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
-import { fetchMinistries, fetchMinistryMemberCounts } from '@/services/ministries';
+import {
+  fetchMinistries,
+  fetchMinistryMemberCounts,
+  createMinistry,
+  updateMinistry,
+  deleteMinistry,
+  fetchMinistryMembers,
+  addMemberToMinistry,
+  removeMemberFromMinistry,
+} from '@/services/ministries';
+import { fetchProfiles } from '@/services/users';
+import { fetchMembers } from '@/services/members';
+import { uploadMinistryLogo } from '@/services/storage';
 import { fetchEvents } from '@/services/events';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,6 +30,39 @@ import toast from 'react-hot-toast';
 import type { Ministry } from '@/types/database';
 
 type ViewMode = 'grid' | 'list';
+
+const schema = z.object({
+  name: z.string().min(1, 'Required'),
+  description: z.string().optional(),
+  leader_id: z.string().optional(),
+});
+type FormValues = z.infer<typeof schema>;
+
+// Download ministry members as CSV
+function downloadMembersCsv(ministryName: string, rows: any[]) {
+  const headers = ['Member Code', 'First Name', 'Last Name', 'Joined Ministry On'];
+  const lines = [
+    headers.join(','),
+    ...rows.map((row) => {
+      const m = row.members;
+      const cells = [
+        m?.member_code ?? '',
+        m?.first_name ?? '',
+        m?.last_name ?? '',
+        row.joined_at ? new Date(row.joined_at).toLocaleDateString() : '',
+      ];
+      return cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
+    }),
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const safeName = ministryName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  a.download = `${safeName}-members-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const ministryColors = [
   { border: 'border-t-blue-600', bg: 'bg-blue-50', button: 'bg-blue-600 hover:bg-blue-700' },
@@ -31,9 +81,21 @@ export function Ministries() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [membersModalId, setMembersModalId] = useState<string | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   const ministriesQuery = useQuery({ queryKey: ['ministries'], queryFn: fetchMinistries });
   const memberCountsQuery = useQuery({ queryKey: ['ministry-member-counts'], queryFn: fetchMinistryMemberCounts });
+  
+  const profilesQuery = useQuery({
+    queryKey: ['profiles'],
+    queryFn: fetchProfiles,
+    enabled: canManage,
+  });
   
   // Fetch ministry reports count
   const reportsCountQuery = useQuery({
@@ -81,11 +143,19 @@ export function Ministries() {
   useRealtimeQuery('ministry_members', ['ministry-member-counts']);
   useRealtimeQuery('ministry_reports', ['ministry-reports-count']);
   useRealtimeQuery('ministry_tasks', ['ministry-tasks-count']);
+  useRealtimeQuery('profiles', ['profiles']);
 
   const ministries = ministriesQuery.data ?? [];
   const memberCounts = memberCountsQuery.data ?? {};
   const reportsCounts = reportsCountQuery.data ?? {};
   const tasksCounts = tasksCountQuery.data ?? {};
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -109,6 +179,52 @@ export function Ministries() {
     return ministryColors[index % ministryColors.length];
   }
 
+  // Handle logo change
+  function handleLogoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  }
+
+  // Open create modal
+  function openCreate() {
+    reset({ name: '', description: '', leader_id: '' });
+    setEditingId(null);
+    setLogoFile(null);
+    setLogoPreview(null);
+    setFormOpen(true);
+  }
+
+  // Handle form submit (create)
+  async function onSubmit(values: FormValues) {
+    try {
+      let logo_url: string | null = null;
+      if (logoFile) {
+        logo_url = await uploadMinistryLogo(logoFile, values.name);
+      }
+
+      const payload = {
+        ...values,
+        leader_id: values.leader_id || null,
+        logo_url,
+      };
+
+      if (editingId) {
+        await updateMinistry(editingId, payload);
+        toast.success('Ministry updated');
+      } else {
+        await createMinistry(payload);
+        toast.success('Ministry created successfully');
+      }
+
+      setFormOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['ministries'] });
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   // Handle View Details - Navigate to ministry dashboard if user is the leader
   function handleViewDetails(ministry: Ministry) {
     // Check if current user is the leader of this ministry
@@ -129,16 +245,7 @@ export function Ministries() {
     }
   }
 
-  // Handle Create Ministry
-  async function handleCreateMinistry() {
-    if (!canManage) {
-      toast.error('Only administrators and secretaries can create ministries');
-      return;
-    }
-    // Navigate to a create form or open modal
-    toast('Ministry creation modal would open here', { icon: 'ℹ️' });
-    // TODO: Implement ministry creation modal
-  }
+  const leaderOptions = (profilesQuery.data ?? []).map((p) => ({ value: p.id, label: p.full_name }));
 
   return (
     <div className="space-y-6">
@@ -153,7 +260,7 @@ export function Ministries() {
         {canManage && (
           <Button 
             className="bg-blue-600 hover:bg-blue-700 text-white"
-            onClick={handleCreateMinistry}
+            onClick={openCreate}
           >
             <Plus className="h-4 w-4" />
             Create Ministry

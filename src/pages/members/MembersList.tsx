@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, UserPlus, Upload, Download, Users, Archive, RotateCcw, Trash2 } from 'lucide-react';
+import { Search, UserPlus, Upload, Download, Users, Archive, RotateCcw, Trash2, Grid, List as ListIcon, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
@@ -23,6 +23,7 @@ export function MembersList() {
   const [importOpen, setImportOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(searchParams.get('action') === 'add');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
@@ -161,6 +162,34 @@ export function MembersList() {
           placeholder="All ministries"
           options={[{ value: '', label: 'All ministries' }, ...ministryOptions]}
         />
+        
+        {/* View Toggle */}
+        <div className="flex items-center justify-end">
+          <div className="flex items-center bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 transition-colors ${
+                viewMode === 'grid'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+              title="Grid view"
+            >
+              <Grid className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+              title="List view"
+            >
+              <ListIcon className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {membersQuery.isLoading ? (
@@ -180,107 +209,215 @@ export function MembersList() {
         />
       ) : (
         <>
-          {/* Member Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {paginatedMembers.map((member, index) => (
-              <div
-                key={member.id}
-                className="bg-white rounded-xl border border-slate-200 p-6 hover:shadow-lg transition-shadow cursor-pointer"
-                onClick={() => navigate(`/members/${member.id}`)}
-              >
-                <div className="flex items-start gap-4">
-                  {/* Avatar */}
-                  {member.profile_image_url ? (
-                    <img 
-                      src={member.profile_image_url} 
-                      alt={`${member.first_name} ${member.last_name}`} 
-                      className="h-14 w-14 rounded-full object-cover shrink-0" 
-                    />
-                  ) : (
-                    <div className={`h-14 w-14 rounded-full ${getAvatarColor(index)} flex items-center justify-center text-white font-semibold text-lg shrink-0`}>
-                      {getInitials(member.first_name, member.last_name)}
-                    </div>
-                  )}
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-semibold text-slate-900 truncate">
-                      {member.first_name} {member.last_name}
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">ID: {member.member_code}</p>
-                    
-                    {/* Status Badge */}
-                    <div className="mt-2">
-                      <Badge tone={statusTone(member.status)}>
-                        {member.status}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Details */}
-                <div className="mt-4 space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Phone</span>
-                    <span className="text-slate-900 font-medium">{member.phone || '—'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Ministry</span>
-                    <span className="text-slate-900 font-medium truncate ml-2">
-                      {member.ministries?.name ?? '—'}
-                    </span>
-                  </div>
-                  {member.district && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">District</span>
-                      <span className="text-slate-900 font-medium">{member.district}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                {canManage && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 flex gap-2">
-                    {member.status === 'archived' ? (
-                      <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRestore(member.id);
-                          }}
-                          className="flex-1 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                        >
-                          <RotateCcw className="h-3 w-3 inline mr-1" />
-                          Restore
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(member.id);
-                          }}
-                          className="flex-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-                        >
-                          <Trash2 className="h-3 w-3 inline mr-1" />
-                          Delete
-                        </button>
-                      </>
+          {/* Grid View */}
+          {viewMode === 'grid' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {paginatedMembers.map((member, index) => (
+                <div
+                  key={member.id}
+                  className="bg-white rounded-xl border border-slate-200 p-6 hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => navigate(`/members/${member.id}`)}
+                >
+                  <div className="flex items-start gap-4">
+                    {/* Avatar */}
+                    {member.profile_image_url ? (
+                      <img 
+                        src={member.profile_image_url} 
+                        alt={`${member.first_name} ${member.last_name}`} 
+                        className="h-14 w-14 rounded-full object-cover shrink-0" 
+                      />
                     ) : (
+                      <div className={`h-14 w-14 rounded-full ${getAvatarColor(index)} flex items-center justify-center text-white font-semibold text-lg shrink-0`}>
+                        {getInitials(member.first_name, member.last_name)}
+                      </div>
+                    )}
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-semibold text-slate-900 truncate">
+                        {member.first_name} {member.last_name}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">ID: {member.member_code}</p>
+                      
+                      {/* Status Badge */}
+                      <div className="mt-2">
+                        <Badge tone={statusTone(member.status)}>
+                          {member.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Details */}
+                  <div className="mt-4 space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Phone</span>
+                      <span className="text-slate-900 font-medium">{member.phone || '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Ministry</span>
+                      <span className="text-slate-900 font-medium truncate ml-2">
+                        {member.ministries?.name ?? '—'}
+                      </span>
+                    </div>
+                    {member.district && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">District</span>
+                        <span className="text-slate-900 font-medium">{member.district}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  {canManage && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex gap-2">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleArchive(member.id);
+                          setEditingId(member.id);
+                          setFormOpen(true);
                         }}
-                        className="flex-1 px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
+                        className="flex-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                       >
-                        <Archive className="h-3 w-3 inline mr-1" />
-                        Archive
+                        <Pencil className="h-3 w-3 inline mr-1" />
+                        Edit
                       </button>
-                    )}
-                  </div>
-                )}
+                      {member.status === 'archived' ? (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRestore(member.id);
+                            }}
+                            className="flex-1 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                          >
+                            <RotateCcw className="h-3 w-3 inline mr-1" />
+                            Restore
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(member.id);
+                            }}
+                            className="flex-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                          >
+                            <Trash2 className="h-3 w-3 inline mr-1" />
+                            Delete
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleArchive(member.id);
+                          }}
+                          className="flex-1 px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
+                        >
+                          <Archive className="h-3 w-3 inline mr-1" />
+                          Archive
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* List View (Table) */}
+          {viewMode === 'list' && (
+            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[820px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Member</th>
+                      <th className="px-4 py-3 font-medium">ID</th>
+                      <th className="px-4 py-3 font-medium">Phone</th>
+                      <th className="px-4 py-3 font-medium">Ministry</th>
+                      <th className="px-4 py-3 font-medium">Status</th>
+                      {canManage && <th className="px-4 py-3 font-medium text-right">Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {paginatedMembers.map((member, index) => (
+                      <tr key={member.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => navigate(`/members/${member.id}`)}
+                            className="flex items-center gap-3 text-left"
+                          >
+                            {member.profile_image_url ? (
+                              <img 
+                                src={member.profile_image_url} 
+                                alt="" 
+                                className="h-10 w-10 rounded-full object-cover" 
+                              />
+                            ) : (
+                              <div className={`h-10 w-10 rounded-full ${getAvatarColor(index)} flex items-center justify-center text-white font-semibold text-sm`}>
+                                {getInitials(member.first_name, member.last_name)}
+                              </div>
+                            )}
+                            <span className="font-medium text-slate-900 hover:text-blue-600 transition-colors">
+                              {member.first_name} {member.last_name}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">{member.member_code}</td>
+                        <td className="px-4 py-3 text-slate-600">{member.phone || '—'}</td>
+                        <td className="px-4 py-3 text-slate-600">{member.ministries?.name ?? '—'}</td>
+                        <td className="px-4 py-3">
+                          <Badge tone={statusTone(member.status)}>{member.status}</Badge>
+                        </td>
+                        {canManage && (
+                          <td className="px-4 py-3">
+                            <div className="flex justify-end gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingId(member.id);
+                                  setFormOpen(true);
+                                }}
+                                className="rounded-md p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              {member.status === 'archived' ? (
+                                <>
+                                  <button
+                                    onClick={() => handleRestore(member.id)}
+                                    className="rounded-md p-1.5 text-slate-400 hover:bg-green-50 hover:text-green-600 transition-colors"
+                                    title="Restore"
+                                  >
+                                    <RotateCcw className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(member.id)}
+                                    className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                    title="Delete permanently"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => handleArchive(member.id)}
+                                  className="rounded-md p-1.5 text-slate-400 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                                  title="Archive"
+                                >
+                                  <Archive className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
 
           {/* Pagination */}
           {totalPages > 1 && (
