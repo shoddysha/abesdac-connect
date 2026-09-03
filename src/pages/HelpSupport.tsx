@@ -537,8 +537,9 @@ export function HelpSupport() {
       </div>
 
       {/* Support Ticket Form */}
-      <Card id="tickets">
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Submit a Support Ticket</h2>
+      <div id="tickets">
+        <Card>
+          <h2 className="text-xl font-bold text-slate-900 mb-4">Submit a Support Ticket</h2>
         <p className="text-sm text-slate-500 mb-6">
           Can't find what you're looking for? Send us a message and we'll get back to you as soon as possible.
         </p>
@@ -625,6 +626,7 @@ export function HelpSupport() {
           </div>
         )}
       </Card>
+      </div>
 
       {/* System Information */}
       <Card className="bg-slate-50">
