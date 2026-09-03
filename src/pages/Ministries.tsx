@@ -115,7 +115,7 @@ export function Ministries() {
     if (profile?.id === ministry.leader_id) {
       navigate('/ministry-dashboard');
     } else {
-      toast.info('Only ministry leaders can access the ministry dashboard');
+      toast('Only ministry leaders can access the ministry dashboard', { icon: 'ℹ️' });
     }
   }
 
@@ -136,7 +136,7 @@ export function Ministries() {
       return;
     }
     // Navigate to a create form or open modal
-    toast.info('Ministry creation modal would open here');
+    toast('Ministry creation modal would open here', { icon: 'ℹ️' });
     // TODO: Implement ministry creation modal
   }
 

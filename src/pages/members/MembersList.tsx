@@ -211,7 +211,7 @@ export function MembersList() {
                     
                     {/* Status Badge */}
                     <div className="mt-2">
-                      <Badge tone={statusTone(member.status)} className="text-xs">
+                      <Badge tone={statusTone(member.status)}>
                         {member.status}
                       </Badge>
                     </div>

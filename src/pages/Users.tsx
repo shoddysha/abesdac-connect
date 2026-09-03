@@ -192,7 +192,7 @@ export function Users() {
                   
                   {/* Status & Actions */}
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
-                    <Badge tone={p.is_active ? 'green' : 'red'} className="text-xs">
+                    <Badge tone={p.is_active ? 'green' : 'red'}>
                       {p.is_active ? 'Active' : 'Disabled'}
                     </Badge>
                     
@@ -211,7 +211,14 @@ export function Users() {
         </div>
       )}
       
-      <AddUserModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />
+      <AddUserModal 
+        open={addModalOpen} 
+        onClose={() => setAddModalOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['profiles'] });
+          toast.success('User created successfully');
+        }}
+      />
     </div>
   );
 }
