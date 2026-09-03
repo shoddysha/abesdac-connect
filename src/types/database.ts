@@ -92,6 +92,7 @@ export interface Event {
   start_time: string;
   end_time: string | null;
   status: EventStatus;
+  organized_by_ministry_id: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;

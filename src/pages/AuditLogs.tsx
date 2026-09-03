@@ -28,7 +28,7 @@ const moduleLabels: Record<string, string> = {
   sms_logs: 'SMS',
 };
 
-const actionColors: Record<string, 'green' | 'blue' | 'red' | 'slate'> = {
+const actionColors: Record<string, 'green' | 'blue' | 'red' | 'orange' | 'slate'> = {
   INSERT: 'green',
   UPDATE: 'blue', 
   DELETE: 'red',
