@@ -31,6 +31,19 @@ export function AppLayout() {
             </div>
           </div>
         </main>
+
+        {/* Footer */}
+        <footer className="shrink-0 border-t border-slate-200 bg-white px-4 sm:px-6 py-3">
+          <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-400">
+            <span>
+              ABESDAC Connect — Abeka SDA Church Management System &copy; {new Date().getFullYear()}
+            </span>
+            <span>
+              Designed &amp; developed by{' '}
+              <span className="font-semibold text-blue-600">NextGen_Developer</span>
+            </span>
+          </div>
+        </footer>
       </div>
     </div>
   );

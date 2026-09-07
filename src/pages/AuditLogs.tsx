@@ -50,6 +50,8 @@ export function AuditLogs() {
   const [moduleFilter, setModuleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 15;
 
   const logsQuery = useQuery({
     queryKey: ['audit-logs'],
@@ -81,19 +83,22 @@ export function AuditLogs() {
     return { totalEvents, successful, errors, warnings };
   }, [logs]);
 
-  const filteredLogs = logs.filter((log) => {
+  const filteredLogs = useMemo(() => logs.filter((log) => {
     const searchLower = search.toLowerCase();
-    const matchesSearch = 
+    const matchesSearch =
       log.user_name?.toLowerCase().includes(searchLower) ||
       log.module?.toLowerCase().includes(searchLower) ||
       log.action?.toLowerCase().includes(searchLower) ||
       log.description?.toLowerCase().includes(searchLower);
-    
     const matchesModule = !moduleFilter || log.module === moduleFilter;
     const matchesStatus = !statusFilter || log.action?.toUpperCase().includes(statusFilter);
-    
     return matchesSearch && matchesModule && matchesStatus;
-  });
+  }), [logs, search, moduleFilter, statusFilter]);
+
+  // Reset to page 1 whenever filters change
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedLogs = filteredLogs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   // Get unique modules for filter
   const moduleOptions = useMemo(() => {
@@ -181,22 +186,19 @@ export function AuditLogs() {
             type="text"
             placeholder="Search by user or action..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
             className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
         <Select
           value={moduleFilter}
-          onChange={(e) => setModuleFilter(e.target.value)}
-          options={[
-            { value: '', label: 'All' },
-            ...moduleOptions
-          ]}
+          onChange={(e) => { setModuleFilter(e.target.value); setCurrentPage(1); }}
+          options={[{ value: '', label: 'All' }, ...moduleOptions]}
           className="w-full sm:w-48"
         />
         <Select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
           options={[
             { value: '', label: 'All Status' },
             { value: 'SUCCESS', label: 'Success' },
@@ -234,7 +236,7 @@ export function AuditLogs() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filteredLogs.map((log) => {
+                {pagedLogs.map((log) => {
                   const isError = log.action?.toUpperCase().includes('ERROR') || 
                                   log.description?.toLowerCase().includes('error');
                   const isWarning = log.action?.toUpperCase().includes('WARNING') || 
@@ -295,9 +297,58 @@ export function AuditLogs() {
             </table>
           </div>
           
-          {/* Footer */}
-          <div className="border-t border-slate-100 px-4 py-3 flex items-center justify-between text-sm text-slate-500">
-            <span>Showing {filteredLogs.length} of {logs.length} log entries</span>
+          {/* Pagination footer */}
+          <div className="border-t border-slate-100 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-slate-500">
+            <span>
+              Showing {filteredLogs.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filteredLogs.length)} of {filteredLogs.length} entries
+            </span>
+
+            <div className="flex items-center gap-1">
+              {/* Prev */}
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Prev
+              </button>
+
+              {/* Page numbers */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push('...');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, i) =>
+                  p === '...' ? (
+                    <span key={`dots-${i}`} className="px-2 py-1 text-xs text-slate-400">…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p as number)}
+                      className={`min-w-[32px] px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                        safePage === p
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+
+              {/* Next */}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+
             {hasRole('administrator') && logs.length > 0 && (
               <Button variant="outline" size="sm" onClick={handleDeleteAll} isLoading={deleting}>
                 <Trash2 className="h-4 w-4" />

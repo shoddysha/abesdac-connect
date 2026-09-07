@@ -116,6 +116,7 @@ export interface Announcement {
   title: string;
   body: string;
   is_pinned: boolean;
+  status: 'published' | 'draft' | 'archived';
   published_at: string;
   expires_at: string | null;
   created_by: string | null;

@@ -64,6 +64,15 @@ function getGreeting() {
   return 'Good evening';
 }
 
+/** Returns e.g. "Q1 2026", "Q2 2026" … auto-updates each quarter */
+function getCurrentQuarter(): string {
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1–12
+  const q = Math.ceil(month / 3);
+  const ordinal = ['1st', '2nd', '3rd', '4th'][q - 1];
+  return `${ordinal} Quarter · ${now.getFullYear()}`;
+}
+
 // Sparkline mini chart
 function Sparkline({ data, color }: { data: number[]; color: string }) {
   const chartData = data.map(v => ({ v }));
@@ -122,7 +131,7 @@ export function Dashboard() {
   // ── Queries ──────────────────────────────────────────────────────────────
   const statsQuery = useQuery({ queryKey: ['member-stats'], queryFn: fetchMemberStats });
   const eventsQuery = useQuery({ queryKey: ['events'], queryFn: fetchEvents });
-  const logsQuery = useQuery({ queryKey: ['audit-logs', 'recent'], queryFn: () => fetchAuditLogs(8) });
+  const logsQuery = useQuery({ queryKey: ['audit-logs', 'recent'], queryFn: () => fetchAuditLogs(5) });
   const birthdaysQuery = useQuery({ queryKey: ['upcoming-birthdays'], queryFn: fetchUpcomingBirthdays });
   const visitorsQuery = useQuery({ queryKey: ['unfollowed-visitors'], queryFn: fetchUnfollowedVisitors });
 
@@ -301,7 +310,7 @@ export function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <p className="text-sm text-slate-500 mb-1">
-            {format(new Date(), 'EEEE · yyyy')}
+            {getCurrentQuarter()}
           </p>
           <h1 className="text-3xl font-bold text-slate-900">
             {getGreeting()}, {profile?.full_name?.split(' ')[0] || 'User'}
@@ -309,12 +318,6 @@ export function Dashboard() {
           <p className="text-slate-500 mt-1">
             Here's what's happening at Abeka SDA Church today.
           </p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-3 py-1.5 text-xs font-medium text-green-700">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            Church in session
-          </span>
         </div>
       </div>
 
