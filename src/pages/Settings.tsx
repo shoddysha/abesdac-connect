@@ -296,13 +296,22 @@ export function Settings() {
     }
 
     try {
-      const { error } = await supabase
-        .from('church_settings')
-        .update({
-          ...values,
-          updated_by: profile?.id,
-        })
-        .eq('id', churchSettingsQuery.data?.id);
+      const existingId = churchSettingsQuery.data?.id;
+
+      let error;
+
+      if (existingId) {
+        // Row exists — update it
+        ({ error } = await supabase
+          .from('church_settings')
+          .update({ ...values, updated_by: profile?.id })
+          .eq('id', existingId));
+      } else {
+        // No row yet — insert one
+        ({ error } = await supabase
+          .from('church_settings')
+          .insert({ ...values, updated_by: profile?.id }));
+      }
 
       if (error) throw error;
 
