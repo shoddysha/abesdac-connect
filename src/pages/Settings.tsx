@@ -412,6 +412,7 @@ export function Settings() {
                     label="Church Phone"
                     {...churchSettingsForm.register('phone')}
                     placeholder="e.g., +233 XXX XXX XXX"
+                    hint="Displayed as the phone support contact in Help & Support"
                   />
                   <Input
                     label="Church Email"
@@ -419,6 +420,7 @@ export function Settings() {
                     {...churchSettingsForm.register('email')}
                     error={churchSettingsForm.formState.errors.email?.message}
                     placeholder="e.g., info@abekasda.org"
+                    hint="Displayed as the email support contact in Help & Support"
                   />
                   <Input
                     label="Website"
