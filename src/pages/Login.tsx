@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, AlertCircle, Loader2, Users, CalendarDays, BarChart3, Shield } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -322,9 +322,12 @@ export function Login() {
 
                 {/* Forgot password */}
                 <div style={{ textAlign: 'right', marginBottom: 22 }}>
-                  <span style={{ fontSize: 13, color: '#2563eb', fontWeight: 500, cursor: 'pointer' }}>
+                  <Link
+                    to="/forgot-password"
+                    style={{ fontSize: 13, color: '#2563eb', fontWeight: 500 }}
+                  >
                     Forgot password?
-                  </span>
+                  </Link>
                 </div>
 
                 {/* Submit button */}

@@ -76,7 +76,9 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
       if (err.message?.includes('already exists') || err.message?.includes('duplicate') || err.message?.includes('unique')) {
         toast.error('This email is already registered');
       } else if (err.message?.includes('function create_new_user') || err.message?.includes('does not exist')) {
-        toast.error('Database function not found. Please run the migration: supabase/migrations/20260901_create_user_function.sql');
+        toast.error('The create_new_user database function is missing. Please run the SQL migration in your Supabase dashboard.');
+      } else if (err.message?.includes('permission denied') || err.message?.includes('not authorized')) {
+        toast.error('Permission denied. Only administrators can create users.');
       } else {
         toast.error(err.message || 'Failed to create user. Please try again.');
       }
