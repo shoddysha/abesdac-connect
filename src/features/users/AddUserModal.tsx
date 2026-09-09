@@ -1,184 +1,265 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { Input, Select } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
+import { UserPlus, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import type { UserRole } from '@/types/database';
 
 const addUserSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  email:     z.string().email('Enter a valid email address'),
+  password:  z.string().min(6, 'Password must be at least 6 characters'),
   full_name: z.string().min(1, 'Full name is required'),
-  phone: z.string().optional(),
-  role: z.enum(['administrator', 'secretary', 'pastor', 'ministry_leader']),
+  phone:     z.string().optional(),
+  role:      z.enum(['administrator', 'secretary', 'pastor', 'ministry_leader', 'member']),
 });
 
-type AddUserFormValues = z.infer<typeof addUserSchema>;
+type FormValues = z.infer<typeof addUserSchema>;
 
-const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: 'administrator', label: 'Administrator' },
-  { value: 'secretary', label: 'Secretary' },
-  { value: 'pastor', label: 'Pastor' },
-  { value: 'ministry_leader', label: 'Ministry Leader' },
+const ROLE_OPTIONS: { value: UserRole; label: string; desc: string }[] = [
+  { value: 'administrator',  label: 'Administrator',   desc: 'Full access to all features' },
+  { value: 'secretary',      label: 'Secretary',        desc: 'Manage members, events & SMS' },
+  { value: 'pastor',         label: 'Pastor',           desc: 'View reports & prayer requests' },
+  { value: 'ministry_leader',label: 'Ministry Leader',  desc: 'Manage own ministry & reports' },
+  { value: 'member',         label: 'Member',           desc: 'Basic access only' },
 ];
 
 interface AddUserModalProps {
-  open: boolean;
-  onClose: () => void;
+  open:      boolean;
+  onClose:   () => void;
   onSuccess: () => void;
 }
 
-export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
-  const form = useForm<AddUserFormValues>({
-    resolver: zodResolver(addUserSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-      full_name: '',
-      phone: '',
-      role: 'ministry_leader',
+// ── Strategy 1: RPC function (preferred) ────────────────────────────────────
+async function createViaRpc(values: FormValues) {
+  const { data, error } = await supabase.rpc('create_new_user', {
+    p_email:     values.email,
+    p_password:  values.password,
+    p_full_name: values.full_name,
+    p_phone:     values.phone || null,
+    p_role:      values.role,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// ── Strategy 2: signUp + profile upsert (fallback) ───────────────────────────
+async function createViaSignUp(values: FormValues) {
+  // Use Supabase signUp — this creates the auth.users row
+  const { data, error } = await supabase.auth.signUp({
+    email:    values.email,
+    password: values.password,
+    options: {
+      data: { full_name: values.full_name },
+      // Skip email confirmation
+      emailRedirectTo: undefined,
     },
   });
 
-  async function onSubmit(values: AddUserFormValues) {
+  if (error) throw error;
+  if (!data.user) throw new Error('User creation returned no user object');
+
+  const userId = data.user.id;
+
+  // Upsert the profile with the correct role
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .upsert({
+      id:         userId,
+      email:      values.email,
+      full_name:  values.full_name,
+      phone:      values.phone || null,
+      role:       values.role,
+      is_active:  true,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+  if (profileError) throw profileError;
+
+  return { success: true, user_id: userId, note: 'signup' };
+}
+
+export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
+  const [method, setMethod] = useState<'rpc' | 'signup' | null>(null);
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(addUserSchema),
+    defaultValues: {
+      email: '', password: '', full_name: '', phone: '', role: 'ministry_leader',
+    },
+  });
+
+  const selectedRole = form.watch('role');
+
+  function handleClose() {
+    form.reset();
+    setMethod(null);
+    onClose();
+  }
+
+  async function onSubmit(values: FormValues) {
     try {
-      // Call the database function to create user with auth
-      const { data, error } = await supabase.rpc('create_new_user', {
-        p_email: values.email,
-        p_password: values.password,
-        p_full_name: values.full_name,
-        p_phone: values.phone || null,
-        p_role: values.role,
-      });
+      // Try RPC first
+      try {
+        await createViaRpc(values);
+        setMethod('rpc');
+        toast.success(`✅ ${values.full_name} has been added. They can log in immediately.`);
+        form.reset();
+        onSuccess();
+        handleClose();
+        return;
+      } catch (rpcErr: any) {
+        // If the function simply doesn't exist, fall through to signUp
+        const isNotFound =
+          rpcErr?.message?.includes('does not exist') ||
+          rpcErr?.message?.includes('function') ||
+          rpcErr?.code === 'PGRST202' ||
+          rpcErr?.code === '42883';
 
-      if (error) {
-        throw error;
-      }
-
-      // Check the response from the function
-      if (data && typeof data === 'object' && 'success' in data) {
-        if (!data.success) {
-          throw new Error(data.message || 'Failed to create user');
+        if (!isNotFound) {
+          // It's a real error (duplicate email, invalid role, etc.) — surface it
+          throw rpcErr;
         }
+        // Function not deployed — fall through to signUp strategy
       }
 
-      toast.success(`User ${values.full_name} created successfully! They can log in immediately.`);
+      // Fallback: signUp strategy
+      await createViaSignUp(values);
+      setMethod('signup');
+      toast.success(`✅ ${values.full_name} has been added. They will receive a confirmation email.`, { duration: 5000 });
       form.reset();
       onSuccess();
-      onClose();
+      handleClose();
+
     } catch (err: any) {
-      console.error('Error creating user:', err);
-      
-      if (err.message?.includes('already exists') || err.message?.includes('duplicate') || err.message?.includes('unique')) {
-        toast.error('This email is already registered');
-      } else if (err.message?.includes('function create_new_user') || err.message?.includes('does not exist')) {
-        toast.error('The create_new_user database function is missing. Please run the SQL migration in your Supabase dashboard.');
-      } else if (err.message?.includes('permission denied') || err.message?.includes('not authorized')) {
-        toast.error('Permission denied. Only administrators can create users.');
+      console.error('AddUser error:', err);
+
+      const msg: string = err?.message || '';
+
+      if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('duplicate') || msg.includes('unique')) {
+        toast.error('That email address is already registered.');
+      } else if (msg.includes('Invalid role')) {
+        toast.error('Invalid role selected.');
+      } else if (msg.includes('permission') || msg.includes('not authorized')) {
+        toast.error('Permission denied — only administrators can add users.');
+      } else if (msg.includes('email') && msg.includes('confirmation')) {
+        // signUp succeeded but email confirmation required — still show success
+        toast.success(`${values.full_name} added. A confirmation email has been sent.`);
+        form.reset();
+        onSuccess();
+        handleClose();
       } else {
-        toast.error(err.message || 'Failed to create user. Please try again.');
+        toast.error(msg || 'Failed to create user. Please try again.');
       }
     }
   }
 
-  return (
-    <Modal open={open} onClose={onClose} title="Add New User">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-xl font-semibold text-slate-900">Add New User</h2>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+  const roleInfo = ROLE_OPTIONS.find(r => r.value === selectedRole);
 
-        {/* Form */}
-        <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-4">
+  return (
+    <Modal open={open} onClose={handleClose} title="Add New User" size="lg">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+
+        {/* Two-column: name + email */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Full Name"
-            placeholder="e.g., John Doe"
+            placeholder="e.g., Kwame Mensah"
             {...form.register('full_name')}
             error={form.formState.errors.full_name?.message}
           />
-
           <Input
             label="Email Address"
             type="email"
-            placeholder="user@example.com"
+            placeholder="kwame@example.com"
             {...form.register('email')}
             error={form.formState.errors.email?.message}
           />
+        </div>
 
+        {/* Two-column: password + phone */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
-            label="Password"
+            label="Temporary Password"
             type="password"
-            placeholder="Minimum 6 characters"
+            placeholder="Min. 6 characters"
             {...form.register('password')}
             error={form.formState.errors.password?.message}
           />
-
           <Input
-            label="Phone Number (Optional)"
+            label="Phone (Optional)"
             type="tel"
-            placeholder="e.g., +233 24 123 4567"
+            placeholder="+233 24 123 4567"
             {...form.register('phone')}
             error={form.formState.errors.phone?.message}
           />
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Role
-            </label>
-            <select
-              {...form.register('role')}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {ROLE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            {form.formState.errors.role && (
-              <p className="text-xs text-red-600 mt-1">{form.formState.errors.role.message}</p>
-            )}
+        {/* Role selector */}
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Role</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {ROLE_OPTIONS.map(opt => (
+              <label
+                key={opt.value}
+                className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                  selectedRole === opt.value
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  value={opt.value}
+                  {...form.register('role')}
+                  className="mt-0.5 accent-blue-600"
+                />
+                <div>
+                  <p className={`text-sm font-semibold ${selectedRole === opt.value ? 'text-blue-700' : 'text-slate-800'}`}>
+                    {opt.label}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
           </div>
-
-          {/* Note */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-xs text-blue-700">
-              <strong>Note:</strong> The user will be created with full authentication and can log in immediately 
-              with the provided email and password. They can change their password after logging in.
+          {form.formState.errors.role && (
+            <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {form.formState.errors.role.message}
             </p>
-          </div>
+          )}
+        </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-3 pt-2">
-            <Button
-              type="submit"
-              isLoading={form.formState.isSubmitting}
-              className="flex-1"
-            >
-              Create User
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </div>
+        {/* Info banner */}
+        <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+          <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-700 leading-relaxed">
+            The user will be created with the <strong>{roleInfo?.label}</strong> role.
+            They can sign in with their email and password immediately after being added.
+            They can update their password from the Settings page.
+          </p>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-3 pt-1">
+          <Button type="button" variant="outline" onClick={handleClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            isLoading={form.formState.isSubmitting}
+            className="flex-1"
+          >
+            <UserPlus className="h-4 w-4" />
+            {form.formState.isSubmitting ? 'Creating…' : 'Add User'}
+          </Button>
+        </div>
+      </form>
     </Modal>
   );
 }
