@@ -173,9 +173,7 @@ export async function createMinistryBudget(input: CreateBudgetInput, submittedBy
     'create',
     'ministry_budgets',
     `${profile?.full_name || 'User'} submitted budget "${input.title}" for ${ministry?.name || 'ministry'}`,
-    budget.id,
-    submittedBy,
-    profile?.full_name
+    budget.id
   );
 
   return budget.id;
@@ -205,9 +203,7 @@ export async function deleteMinistryBudget(id: string): Promise<void> {
       'delete',
       'ministry_budgets',
       `Budget "${budget.title}" from ${(budget as any).ministries?.name || 'ministry'} was deleted`,
-      id,
-      (budget as any).submitter?.id,
-      (budget as any).submitter?.full_name
+      id
     );
   }
 }
@@ -255,9 +251,7 @@ export async function updateBudgetStatus(
       'update',
       'ministry_budgets',
       `${reviewerResponse.data.full_name} ${status} budget "${budget.title}" from ${budget.ministries?.name || 'ministry'}${reviewNote ? ` - Note: ${reviewNote}` : ''}`,
-      id,
-      reviewedBy,
-      reviewerResponse.data.full_name
+      id
     );
   }
 

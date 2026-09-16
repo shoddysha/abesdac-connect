@@ -33,13 +33,15 @@ export function AppLayout() {
         </main>
 
         {/* Footer */}
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-4 sm:px-6 py-3">
-          <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-slate-400">
-            <span>
-              ABESDAC Connect — Abeka SDA Church Management System &copy; {new Date().getFullYear()}
+        <footer className="shrink-0 border-t border-slate-200 bg-white px-4 sm:px-6 py-1.5 sm:py-3">
+          <div className="mx-auto max-w-7xl flex flex-row items-center justify-between gap-1 text-xs text-slate-400">
+            <span className="truncate">
+              <span className="hidden sm:inline">ABESDAC Connect — Abeka SDA Church Management System</span>
+              <span className="sm:hidden">ABESDAC Connect</span>
+              {' '}&copy; {new Date().getFullYear()}
             </span>
-            <span>
-              Designed &amp; developed by{' '}
+            <span className="shrink-0">
+              <span className="hidden sm:inline">Designed &amp; developed by </span>
               <span className="font-semibold text-blue-600">NextGen_Developer</span>
             </span>
           </div>

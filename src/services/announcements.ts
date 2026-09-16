@@ -87,9 +87,7 @@ export async function markAnnouncementAsViewed(announcementId: string): Promise<
       'create',
       'announcement_views',
       `Viewed announcement: ${announcement.title}`,
-      announcementId,
-      user.id,
-      undefined
+      announcementId
     );
   }
 }
@@ -163,9 +161,7 @@ export async function createAnnouncement(payload: Partial<Announcement>) {
     'create',
     'announcements',
     `Announcement created: ${data.title}${data.is_pinned ? ' (Broadcast)' : ''}`,
-    data.id,
-    (await supabase.auth.getUser()).data.user?.id,
-    undefined
+    data.id
   );
   
   // If announcement is pinned (broadcast), send SMS to all active members immediately
@@ -209,9 +205,7 @@ export async function updateAnnouncement(id: string, payload: Partial<Announceme
     'update',
     'announcements',
     auditMessage,
-    id,
-    (await supabase.auth.getUser()).data.user?.id,
-    undefined
+    id
   );
   
   // If announcement was just pinned (broadcast enabled), send SMS to all active members immediately
@@ -251,9 +245,7 @@ export async function deleteAnnouncement(id: string) {
       'delete',
       'announcements',
       `Announcement deleted: ${announcement.title}`,
-      id,
-      (await supabase.auth.getUser()).data.user?.id,
-      undefined
+      id
     );
   }
 }

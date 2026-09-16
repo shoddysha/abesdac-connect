@@ -24,9 +24,13 @@ export function useIdleLogout() {
   useEffect(() => {
     if (!session) return; // nothing to time out if no one is signed in
 
-    // Read timeout from localStorage (default 15 minutes)
-    const savedTimeout = localStorage.getItem('idle_timeout_minutes');
-    const timeoutMinutes = savedTimeout ? parseInt(savedTimeout) : DEFAULT_IDLE_TIMEOUT_MINUTES;
+    // Read timeout from localStorage (default 15 minutes).
+    // Clamp to [5, 60] so a tampered value can't disable the logout or
+    // trigger an immediate logout (parseInt with explicit radix prevents
+    // octal mis-parsing of values like "010").
+    const raw = parseInt(localStorage.getItem('idle_timeout_minutes') ?? '', 10);
+    const timeoutMinutes =
+      Number.isFinite(raw) && raw >= 5 && raw <= 60 ? raw : DEFAULT_IDLE_TIMEOUT_MINUTES;
     const IDLE_TIMEOUT_MS = timeoutMinutes * 60 * 1000;
 
     async function handleTimeout() {

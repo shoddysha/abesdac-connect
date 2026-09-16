@@ -455,7 +455,20 @@ create policy "profiles_select_authenticated" on public.profiles
 
 drop policy if exists "profiles_update_own_or_admin" on public.profiles;
 create policy "profiles_update_own_or_admin" on public.profiles
-  for update using (auth.uid() = id or public.is_admin());
+  for update
+  using (auth.uid() = id or public.is_admin())
+  with check (
+    -- Non-admins cannot change their own role
+    case
+      when public.is_admin() then true
+      else (role = (select role from public.profiles where id = profiles.id))
+    end
+    -- Nobody may escalate their own role via self-update
+    and not (
+      auth.uid() = id
+      and role != (select role from public.profiles where id = auth.uid())
+    )
+  );
 
 drop policy if exists "profiles_insert_admin" on public.profiles;
 create policy "profiles_insert_admin" on public.profiles
@@ -481,8 +494,29 @@ create policy "ministries_update_own_leader" on public.ministries
 
 -- ---- MEMBERS ----
 drop policy if exists "members_select_all_authenticated" on public.members;
-create policy "members_select_all_authenticated" on public.members
-  for select using (auth.role() = 'authenticated');
+drop policy if exists "members_select_scoped" on public.members;
+create policy "members_select_scoped" on public.members
+  for select using (
+    -- Administrators, secretaries, and pastors see all members
+    public.current_role() in ('administrator', 'secretary', 'pastor')
+    -- Ministry leaders see members whose primary ministry matches theirs
+    or (
+      public.current_role() = 'ministry_leader'
+      and ministry_id in (
+        select id from public.ministries where leader_id = auth.uid()
+      )
+    )
+    -- Ministry leaders also see members enrolled via the junction table
+    or (
+      public.current_role() = 'ministry_leader'
+      and id in (
+        select mm.member_id
+        from public.ministry_members mm
+        join public.ministries mn on mn.id = mm.ministry_id
+        where mn.leader_id = auth.uid()
+      )
+    )
+  );
 
 drop policy if exists "members_write_admin_secretary" on public.members;
 create policy "members_write_admin_secretary" on public.members
@@ -562,6 +596,19 @@ create policy "audit_logs_select_authenticated_roles" on public.audit_logs
   for select using (
     public.current_role() in ('administrator', 'pastor', 'secretary', 'ministry_leader')
   );
+
+-- Audit rows are append-only — nobody may update or delete them
+drop policy if exists "audit_logs_insert_authenticated" on public.audit_logs;
+create policy "audit_logs_insert_authenticated" on public.audit_logs
+  for insert with check (auth.role() = 'authenticated');
+
+drop policy if exists "audit_logs_no_update" on public.audit_logs;
+create policy "audit_logs_no_update" on public.audit_logs
+  for update using (false);
+
+drop policy if exists "audit_logs_no_delete" on public.audit_logs;
+create policy "audit_logs_no_delete" on public.audit_logs
+  for delete using (false);
 
 -- audit_logs is written only by the SECURITY DEFINER trigger function above,
 -- so no insert policy is needed for normal client roles.

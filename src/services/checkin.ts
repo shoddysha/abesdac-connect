@@ -59,7 +59,9 @@ export async function getCheckinSessionInfo(token: string) {
 }
 
 export async function searchCheckinMembers(token: string, query: string) {
-  const { data, error } = await supabase.rpc('search_checkin_members', { p_token: token, p_query: query });
+  // Cap input length before sending to the DB function to prevent ReDoS / oversized queries
+  const safeQuery = query.trim().slice(0, 100);
+  const { data, error } = await supabase.rpc('search_checkin_members', { p_token: token, p_query: safeQuery });
   if (error) throw error;
   return (data ?? []) as { id: string; first_name: string; last_name: string; member_code: string }[];
 }

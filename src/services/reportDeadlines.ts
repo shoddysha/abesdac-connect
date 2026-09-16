@@ -96,9 +96,7 @@ export async function createReportDeadline(
     'create',
     'report_deadlines',
     `Created deadline "${title}" for ${ministry?.name || 'Unknown Ministry'} - Due: ${deadlineDate}`,
-    data.id,
-    createdBy,
-    undefined
+    data.id
   );
   
   return data as ReportDeadline;
@@ -138,15 +136,12 @@ export async function deleteReportDeadline(id: string): Promise<void> {
   if (error) throw error;
   
   // Log audit
-  const { data: { user } } = await supabase.auth.getUser();
   if (deadline) {
     await logAudit(
       'delete',
       'report_deadlines',
       `Deleted deadline: "${deadline.title}" for ${(deadline as any).ministries?.name || 'Unknown Ministry'}`,
-      id,
-      user?.id,
-      undefined
+      id
     );
   }
 }
@@ -174,15 +169,12 @@ export async function markDeadlineAsCompleted(id: string): Promise<void> {
   if (error) throw error;
   
   // Log audit
-  const { data: { user } } = await supabase.auth.getUser();
   if (deadline) {
     await logAudit(
       'update',
       'report_deadlines',
       `Marked deadline as complete: "${deadline.title}" for ${(deadline as any).ministries?.name || 'Unknown Ministry'}`,
-      id,
-      user?.id,
-      undefined
+      id
     );
   }
 }

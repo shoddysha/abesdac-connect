@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Badge, statusTone } from '@/components/ui/Badge';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
-import { fetchMembers, archiveMember, restoreMember, deleteMember } from '@/services/members';
+import { fetchMembers, fetchMembersForMinistry, archiveMember, restoreMember, deleteMember } from '@/services/members';
 import { fetchMinistries } from '@/services/ministries';
 import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportToCSV, exportToExcel } from '@/utils/export';
 import { ImportMembersModal } from '@/features/import/ImportMembersModal';
 import { MemberFormModal } from '@/pages/members/MemberFormModal';
+import { supabase } from '@/lib/supabase';
 
 export function MembersList() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,13 +27,56 @@ export function MembersList() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { hasRole } = useAuth();
+  const { hasRole, profile } = useAuth();
   const canManage = hasRole('administrator', 'secretary');
+  const isMinistryLeader = hasRole('ministry_leader');
 
-  const filters = { search, status, ministryId };
-  const membersQuery = useQuery({ queryKey: ['members', filters], queryFn: () => fetchMembers(filters) });
-  const ministriesQuery = useQuery({ queryKey: ['ministries'], queryFn: fetchMinistries });
-  useRealtimeQuery('members', ['members', filters]);
+  // ── Resolve the logged-in leader's ministry (ministry_leader role only) ──
+  const leaderMinistryQuery = useQuery({
+    queryKey: ['my-ministry-id', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return null;
+      const { data, error } = await supabase
+        .from('ministries')
+        .select('id, name')
+        .eq('leader_id', profile.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; name: string } | null;
+    },
+    enabled: isMinistryLeader && !!profile?.id,
+    staleTime: 0,
+  });
+
+  const leaderMinistry = leaderMinistryQuery.data ?? null;
+
+  // For ministry leaders, filter is locked to their ministry.
+  // For others, use the user-selected ministryId dropdown.
+  const effectiveMinistryId = isMinistryLeader ? (leaderMinistry?.id ?? '') : ministryId;
+
+  const filters = { search, status, ministryId: isMinistryLeader ? '' : ministryId };
+
+  // Ministry leaders use the combined query (FK + junction); everyone else uses the normal query.
+  const membersQuery = useQuery({
+    queryKey: isMinistryLeader
+      ? ['members-ministry', effectiveMinistryId, { search, status }]
+      : ['members', filters],
+    queryFn: () =>
+      isMinistryLeader && effectiveMinistryId
+        ? fetchMembersForMinistry(effectiveMinistryId, { search, status })
+        : fetchMembers(filters),
+    enabled: isMinistryLeader ? !!effectiveMinistryId : true,
+  });
+
+  const ministriesQuery = useQuery({
+    queryKey: ['ministries'],
+    queryFn: fetchMinistries,
+    enabled: !isMinistryLeader, // ministry leaders don't need the dropdown
+  });
+
+  useRealtimeQuery('members', isMinistryLeader
+    ? ['members-ministry', effectiveMinistryId, { search, status }]
+    : ['members', filters]);
 
   const members = membersQuery.data ?? [];
 
@@ -116,7 +160,10 @@ export function MembersList() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Members</h1>
-          <p className="text-sm text-slate-500 mt-1">{members.length} member{members.length === 1 ? '' : 's'} found</p>
+          {isMinistryLeader && leaderMinistry && (
+            <p className="text-sm font-medium text-blue-600 mt-0.5">{leaderMinistry.name}</p>
+          )}
+          <p className="text-sm text-slate-500 mt-0.5">{members.length} member{members.length === 1 ? '' : 's'} found</p>
         </div>
         {canManage && (
           <div className="flex flex-wrap gap-2">
@@ -159,12 +206,19 @@ export function MembersList() {
             { value: 'archived', label: 'Archived' },
           ]}
         />
-        <Select
-          value={ministryId}
-          onChange={(e) => setMinistryId(e.target.value)}
-          placeholder="All ministries"
-          options={[{ value: '', label: 'All ministries' }, ...ministryOptions]}
-        />
+        {isMinistryLeader ? (
+          /* Locked ministry label for leaders — they can't switch ministry */
+          <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 truncate">
+            {leaderMinistry?.name ?? 'My Ministry'}
+          </div>
+        ) : (
+          <Select
+            value={ministryId}
+            onChange={(e) => setMinistryId(e.target.value)}
+            placeholder="All ministries"
+            options={[{ value: '', label: 'All ministries' }, ...ministryOptions]}
+          />
+        )}
         
         {/* View Toggle */}
         <div className="flex items-center justify-end">
@@ -195,7 +249,7 @@ export function MembersList() {
         </div>
       </div>
 
-      {membersQuery.isLoading ? (
+      {(membersQuery.isLoading || (isMinistryLeader && leaderMinistryQuery.isLoading)) ? (
         <Spinner />
       ) : members.length === 0 ? (
         <EmptyState

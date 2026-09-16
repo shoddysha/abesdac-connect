@@ -196,11 +196,27 @@ export function Settings() {
   }
 
   async function handleBackup() {
+    const confirmed = window.confirm(
+      'You are about to download a full backup of all church data, including member personal information.\n\n' +
+      'This file is unencrypted. Store it securely and do not share it.\n\n' +
+      'Proceed with download?'
+    );
+    if (!confirmed) return;
+
     setBackupLoading(true);
     try {
       const backup = await generateFullBackup();
       downloadBackupFile(backup);
-      toast.success('Backup downloaded');
+      // Audit the backup download so it is traceable
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('audit_logs').insert({
+        action: 'export',
+        module: 'backup',
+        description: 'Full database backup downloaded',
+        user_id: user?.id ?? null,
+        user_name: profile?.full_name ?? null,
+      });
+      toast.success('Backup downloaded — store it in a secure location.');
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -209,9 +225,9 @@ export function Settings() {
   }
 
   function handleTimeoutUpdate() {
-    const timeout = parseInt(idleTimeout);
-    if (isNaN(timeout) || timeout < 1) {
-      toast.error('Please enter a valid timeout (minimum 1 minute)');
+    const timeout = parseInt(idleTimeout, 10);
+    if (isNaN(timeout) || timeout < 5 || timeout > 60) {
+      toast.error('Please enter a timeout between 5 and 60 minutes');
       return;
     }
     localStorage.setItem('idle_timeout_minutes', String(timeout));

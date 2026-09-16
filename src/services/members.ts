@@ -89,6 +89,77 @@ export async function bulkInsertMembers(payloads: Partial<Member>[]) {
   return data as Member[];
 }
 
+/**
+ * Fetch all members belonging to a ministry, using BOTH linkage mechanisms:
+ *  1. members.ministry_id (primary/direct FK assignment)
+ *  2. ministry_members junction table (secondary memberships)
+ * Members in either group are included; duplicates are removed.
+ * Extra filters (search, status, gender) still apply.
+ */
+export async function fetchMembersForMinistry(
+  ministryId: string,
+  filters: Omit<MemberFilters, 'ministryId'> = {}
+) {
+  // Fetch primary members (ministry_id FK) and junction members in parallel
+  const buildBase = () =>
+    supabase
+      .from('members')
+      .select('*, ministries(name)')
+      .eq('is_archived', filters.status === 'archived');
+
+  let primaryQuery = buildBase().eq('ministry_id', ministryId);
+  if (filters.status && filters.status !== 'archived') {
+    primaryQuery = primaryQuery.eq('status', filters.status);
+  }
+  if (filters.gender) primaryQuery = primaryQuery.eq('gender', filters.gender);
+  if (filters.search) {
+    primaryQuery = primaryQuery.or(
+      `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,member_code.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`
+    );
+  }
+
+  // Get member IDs from junction table
+  const junctionQuery = supabase
+    .from('ministry_members')
+    .select('member_id')
+    .eq('ministry_id', ministryId);
+
+  const [primaryResult, junctionResult] = await Promise.all([primaryQuery, junctionQuery]);
+  if (primaryResult.error) throw primaryResult.error;
+  if (junctionResult.error) throw junctionResult.error;
+
+  // Collect junction member IDs that aren't already in the primary set
+  const primaryIds = new Set((primaryResult.data ?? []).map((m) => m.id));
+  const extraIds = (junctionResult.data ?? [])
+    .map((r) => r.member_id)
+    .filter((id) => !primaryIds.has(id));
+
+  let extraMembers: (Member & { ministries: { name: string } | null })[] = [];
+  if (extraIds.length > 0) {
+    let extraQuery = buildBase().in('id', extraIds);
+    if (filters.status && filters.status !== 'archived') {
+      extraQuery = extraQuery.eq('status', filters.status);
+    }
+    if (filters.gender) extraQuery = extraQuery.eq('gender', filters.gender);
+    if (filters.search) {
+      extraQuery = extraQuery.or(
+        `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,member_code.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`
+      );
+    }
+    const extraResult = await extraQuery;
+    if (extraResult.error) throw extraResult.error;
+    extraMembers = (extraResult.data ?? []) as (Member & { ministries: { name: string } | null })[];
+  }
+
+  const combined = [...(primaryResult.data ?? []), ...extraMembers] as (Member & {
+    ministries: { name: string } | null;
+  })[];
+
+  // Sort by last name to match fetchMembers behaviour
+  combined.sort((a, b) => a.last_name.localeCompare(b.last_name));
+  return combined;
+}
+
 export async function fetchMemberStats() {
   const { count: total } = await supabase.from('members').select('*', { count: 'exact', head: true }).eq('is_archived', false);
   const { count: active } = await supabase

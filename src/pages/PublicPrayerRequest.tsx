@@ -9,9 +9,14 @@ import { createPrayerRequest } from '@/services/prayerRequests';
 import toast from 'react-hot-toast';
 
 const schema = z.object({
-  name: z.string().min(2, 'Please enter your name'),
-  request: z.string().min(10, 'Please provide more details (at least 10 characters)'),
+  name: z.string().min(2, 'Please enter your name').max(100, 'Name is too long'),
+  request: z
+    .string()
+    .min(10, 'Please provide more details (at least 10 characters)')
+    .max(2000, 'Request is too long (max 2000 characters)'),
   anonymous: z.boolean(),
+  // Honeypot — must stay empty; bots fill it, humans don't see it
+  _hp: z.string().max(0, 'Invalid submission'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -31,12 +36,15 @@ export function PublicPrayerRequest() {
       name: '',
       request: '',
       anonymous: false,
+      _hp: '',
     },
   });
 
   const isAnonymous = watch('anonymous');
 
   async function onSubmit(values: FormValues) {
+    // Honeypot check — bots fill hidden fields, humans don't
+    if (values._hp) return;
     try {
       await createPrayerRequest({
         requested_by: values.anonymous ? 'Anonymous' : values.name,
@@ -105,6 +113,15 @@ export function PublicPrayerRequest() {
               </div>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+                {/* Honeypot — visually hidden, only bots fill this */}
+                <input
+                  type="text"
+                  {...register('_hp')}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+                  autoComplete="off"
+                />
                 <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-sm text-blue-800">
                   <p className="font-medium mb-2">Your prayer request will be:</p>
                   <ul className="space-y-1 text-xs">
@@ -139,13 +156,19 @@ export function PublicPrayerRequest() {
                   />
                 )}
 
-                <Textarea
-                  label="Prayer Request"
-                  rows={8}
-                  placeholder="Share your prayer request in detail... Our pastoral team will lift you up in prayer."
-                  {...register('request')}
-                  error={errors.request?.message}
-                />
+                <div>
+                  <Textarea
+                    label="Prayer Request"
+                    rows={8}
+                    placeholder="Share your prayer request in detail... Our pastoral team will lift you up in prayer."
+                    {...register('request')}
+                    error={errors.request?.message}
+                    maxLength={2000}
+                  />
+                  <p className="mt-1 text-right text-xs text-slate-400">
+                    {watch('request').length}/2000
+                  </p>
+                </div>
 
                 <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
                   <p className="font-medium mb-1">Scripture Encouragement:</p>

@@ -59,9 +59,7 @@ export async function createVisitor(visitor: Omit<Visitor, 'id' | 'created_at'>)
     'create',
     'visitors',
     `New visitor recorded: ${data.first_name} ${data.last_name}`,
-    data.id,
-    (await supabase.auth.getUser()).data.user?.id,
-    undefined
+    data.id
   );
   
   // Send welcome SMS immediately if phone number is provided
@@ -100,9 +98,7 @@ export async function updateVisitor(id: string, updates: Partial<Visitor>): Prom
     'update',
     'visitors',
     `Visitor information updated`,
-    id,
-    (await supabase.auth.getUser()).data.user?.id,
-    undefined
+    id
   );
 }
 
@@ -123,9 +119,7 @@ export async function deleteVisitor(id: string): Promise<void> {
       'delete',
       'visitors',
       `Visitor deleted: ${visitor.first_name} ${visitor.last_name}`,
-      id,
-      (await supabase.auth.getUser()).data.user?.id,
-      undefined
+      id
     );
   }
 }

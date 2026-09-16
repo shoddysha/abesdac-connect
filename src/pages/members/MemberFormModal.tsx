@@ -314,11 +314,11 @@ export function MemberFormModal({
         <section>
           <h3 className="mb-3 text-sm font-semibold text-primary">Contact information</h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Input label="Phone number" {...register('phone')} />
-            <Input label="Alternate phone" {...register('alternate_phone')} />
-            <Input label="Email address" type="email" {...register('email')} error={errors.email?.message} />
-            <Textarea label="Residential address" className="lg:col-span-2" {...register('residential_address')} />
-            <Input label="GPS address" {...register('gps_address')} />
+            <Input label="Phone number" autoComplete="off" {...register('phone')} />
+            <Input label="Alternate phone" autoComplete="off" {...register('alternate_phone')} />
+            <Input label="Email address" type="email" autoComplete="off" {...register('email')} error={errors.email?.message} />
+            <Textarea label="Residential address" autoComplete="off" className="lg:col-span-2" {...register('residential_address')} />
+            <Input label="GPS address" autoComplete="off" {...register('gps_address')} />
           </div>
         </section>
 
@@ -351,10 +351,10 @@ export function MemberFormModal({
         <section>
           <h3 className="mb-3 text-sm font-semibold text-primary">Family information</h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Input label="Spouse" {...register('spouse_name')} />
-            <Input label="Children" hint="Comma-separated names" {...register('children_names')} />
-            <Input label="Emergency contact name" {...register('emergency_contact_name')} />
-            <Input label="Emergency contact phone" {...register('emergency_contact_phone')} />
+            <Input label="Spouse" autoComplete="off" {...register('spouse_name')} />
+            <Input label="Children" hint="Comma-separated names" autoComplete="off" {...register('children_names')} />
+            <Input label="Emergency contact name" autoComplete="off" {...register('emergency_contact_name')} />
+            <Input label="Emergency contact phone" autoComplete="off" {...register('emergency_contact_phone')} />
           </div>
         </section>
 
