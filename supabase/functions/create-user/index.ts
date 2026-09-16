@@ -84,14 +84,22 @@ serve(async (req) => {
     });
 
     if (createError) {
-      // Surface duplicate email as a clear message
+      // Log the full error details for debugging
+      console.error('createUser error:', JSON.stringify(createError));
+
       const isDuplicate =
         createError.message.toLowerCase().includes('already registered') ||
         createError.message.toLowerCase().includes('already exists') ||
         createError.message.toLowerCase().includes('duplicate');
 
       return new Response(
-        JSON.stringify({ error: isDuplicate ? 'A user with that email address already exists.' : createError.message }),
+        JSON.stringify({
+          error: isDuplicate
+            ? 'A user with that email address already exists.'
+            : createError.message,
+          // Return full error details so the frontend can show them
+          detail: createError,
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

@@ -70,7 +70,10 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
       const result = await response.json();
 
       if (!response.ok || result.error) {
-        throw new Error(result.error || 'Failed to create user');
+        // Show the full error detail so we can diagnose it
+        const msg = result.error || 'Failed to create user';
+        const detail = result.detail ? ` (${JSON.stringify(result.detail)})` : '';
+        throw new Error(msg + detail);
       }
 
       toast.success(`${values.full_name} has been added. They can log in immediately.`);
