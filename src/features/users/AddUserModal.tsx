@@ -43,24 +43,36 @@ async function createViaRpc(values: FormValues) {
     p_role:      values.role,
   });
   if (error) throw error;
+
+  // RPC returned null or empty object — means the function exists but the
+  // auth.users insert silently failed (service role required for that table).
+  // Treat as "function not available" and fall through to the signUp strategy.
+  if (!data || (typeof data === 'object' && !('user_id' in data))) {
+    throw Object.assign(new Error('RPC returned no user_id'), { code: 'PGRST202' });
+  }
+
   return data;
 }
 
 // ── Strategy 2: signUp + profile upsert (fallback) ───────────────────────────
 async function createViaSignUp(values: FormValues) {
-  // Use Supabase signUp — this creates the auth.users row
   const { data, error } = await supabase.auth.signUp({
     email:    values.email,
     password: values.password,
     options: {
       data: { full_name: values.full_name },
-      // Skip email confirmation
       emailRedirectTo: undefined,
     },
   });
 
   if (error) throw error;
   if (!data.user) throw new Error('User creation returned no user object');
+
+  // Supabase returns a fake user object with empty identities when the email
+  // is already registered (instead of throwing an error). Detect and surface it.
+  if (data.user.identities && data.user.identities.length === 0) {
+    throw new Error('A user with that email address already exists.');
+  }
 
   const userId = data.user.id;
 
@@ -127,9 +139,12 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
       }
 
       // Fallback: signUp strategy
-      await createViaSignUp(values);
+      const result = await createViaSignUp(values);
       setMethod('signup');
-      toast.success(`✅ ${values.full_name} has been added. They will receive a confirmation email.`, { duration: 5000 });
+      toast.success(
+        `✅ ${values.full_name} has been added. They need to confirm their email before signing in.`,
+        { duration: 6000 }
+      );
       form.reset();
       onSuccess();
       handleClose();
