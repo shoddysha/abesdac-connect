@@ -229,13 +229,25 @@ returns trigger
 language plpgsql
 security definer
 as $$
+declare
+  v_role user_role := 'secretary';
 begin
+  -- Safely cast the role from metadata — fall back to 'secretary' if
+  -- the value is missing or not a valid enum so user creation never fails.
+  begin
+    if new.raw_user_meta_data->>'role' is not null then
+      v_role := (new.raw_user_meta_data->>'role')::user_role;
+    end if;
+  exception when others then
+    v_role := 'secretary';
+  end;
+
   insert into public.profiles (id, full_name, email, role)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     new.email,
-    coalesce((new.raw_user_meta_data->>'role')::user_role, 'secretary')
+    v_role
   )
   on conflict (id) do nothing;
   return new;

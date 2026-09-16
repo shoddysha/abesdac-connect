@@ -80,7 +80,7 @@ serve(async (req) => {
       email: email.toLowerCase().trim(),
       password,
       email_confirm: true,           // pre-confirm so they can log in immediately
-      user_metadata: { full_name },
+      user_metadata: { full_name, role },
     });
 
     if (createError) {
