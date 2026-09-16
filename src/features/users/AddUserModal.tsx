@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -7,7 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
-import { UserPlus, AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { UserPlus, AlertCircle, Info } from 'lucide-react';
 import type { UserRole } from '@/types/database';
 
 const addUserSchema = z.object({
@@ -21,10 +20,10 @@ const addUserSchema = z.object({
 type FormValues = z.infer<typeof addUserSchema>;
 
 const ROLE_OPTIONS: { value: UserRole; label: string; desc: string }[] = [
-  { value: 'administrator',  label: 'Administrator',   desc: 'Full access to all features' },
-  { value: 'secretary',      label: 'Secretary',        desc: 'Manage members, events & SMS' },
-  { value: 'pastor',         label: 'Pastor',           desc: 'View reports & prayer requests' },
-  { value: 'ministry_leader',label: 'Ministry Leader',  desc: 'Manage own ministry & reports' },
+  { value: 'administrator',   label: 'Administrator',   desc: 'Full access to all features' },
+  { value: 'secretary',       label: 'Secretary',        desc: 'Manage members, events & SMS' },
+  { value: 'pastor',          label: 'Pastor',           desc: 'View reports & prayer requests' },
+  { value: 'ministry_leader', label: 'Ministry Leader',  desc: 'Manage own ministry & reports' },
 ];
 
 interface AddUserModalProps {
@@ -33,142 +32,54 @@ interface AddUserModalProps {
   onSuccess: () => void;
 }
 
-// ── Strategy 1: RPC function (preferred) ────────────────────────────────────
-async function createViaRpc(values: FormValues) {
-  const { data, error } = await supabase.rpc('create_new_user', {
-    p_email:     values.email,
-    p_password:  values.password,
-    p_full_name: values.full_name,
-    p_phone:     values.phone || null,
-    p_role:      values.role,
-  });
-  if (error) throw error;
-
-  // RPC returned null or empty object — means the function exists but the
-  // auth.users insert silently failed (service role required for that table).
-  // Treat as "function not available" and fall through to the signUp strategy.
-  if (!data || (typeof data === 'object' && !('user_id' in data))) {
-    throw Object.assign(new Error('RPC returned no user_id'), { code: 'PGRST202' });
-  }
-
-  return data;
-}
-
-// ── Strategy 2: signUp + profile upsert (fallback) ───────────────────────────
-async function createViaSignUp(values: FormValues) {
-  const { data, error } = await supabase.auth.signUp({
-    email:    values.email,
-    password: values.password,
-    options: {
-      data: { full_name: values.full_name },
-      emailRedirectTo: undefined,
-    },
-  });
-
-  if (error) throw error;
-  if (!data.user) throw new Error('User creation returned no user object');
-
-  // Supabase returns a fake user object with empty identities when the email
-  // is already registered (instead of throwing an error). Detect and surface it.
-  if (data.user.identities && data.user.identities.length === 0) {
-    throw new Error('A user with that email address already exists.');
-  }
-
-  const userId = data.user.id;
-
-  // Upsert the profile with the correct role
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .upsert({
-      id:         userId,
-      email:      values.email,
-      full_name:  values.full_name,
-      phone:      values.phone || null,
-      role:       values.role,
-      is_active:  true,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
-
-  if (profileError) throw profileError;
-
-  return { success: true, user_id: userId, note: 'signup' };
-}
-
 export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
-  const [method, setMethod] = useState<'rpc' | 'signup' | null>(null);
-
   const form = useForm<FormValues>({
     resolver: zodResolver(addUserSchema),
-    defaultValues: {
-      email: '', password: '', full_name: '', phone: '', role: 'ministry_leader',
-    },
+    defaultValues: { email: '', password: '', full_name: '', phone: '', role: 'ministry_leader' },
   });
 
   const selectedRole = form.watch('role');
 
   function handleClose() {
     form.reset();
-    setMethod(null);
     onClose();
   }
 
   async function onSubmit(values: FormValues) {
     try {
-      // Try RPC first
-      try {
-        await createViaRpc(values);
-        setMethod('rpc');
-        toast.success(`✅ ${values.full_name} has been added. They can log in immediately.`);
-        form.reset();
-        onSuccess();
-        handleClose();
-        return;
-      } catch (rpcErr: any) {
-        // If the function simply doesn't exist, fall through to signUp
-        const isNotFound =
-          rpcErr?.message?.includes('does not exist') ||
-          rpcErr?.message?.includes('function') ||
-          rpcErr?.code === 'PGRST202' ||
-          rpcErr?.code === '42883';
+      // Get the current session token to pass to the Edge Function
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('You must be signed in to add users.');
 
-        if (!isNotFound) {
-          // It's a real error (duplicate email, invalid role, etc.) — surface it
-          throw rpcErr;
-        }
-        // Function not deployed — fall through to signUp strategy
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email:     values.email,
+          password:  values.password,
+          full_name: values.full_name,
+          phone:     values.phone || null,
+          role:      values.role,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || result.error) {
+        throw new Error(result.error || 'Failed to create user');
       }
 
-      // Fallback: signUp strategy
-      const result = await createViaSignUp(values);
-      setMethod('signup');
-      toast.success(
-        `✅ ${values.full_name} has been added. They need to confirm their email before signing in.`,
-        { duration: 6000 }
-      );
+      toast.success(`${values.full_name} has been added. They can log in immediately.`);
       form.reset();
       onSuccess();
       handleClose();
 
     } catch (err: any) {
-      console.error('AddUser error:', err);
-
-      const msg: string = err?.message || '';
-
-      if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('duplicate') || msg.includes('unique')) {
-        toast.error('That email address is already registered.');
-      } else if (msg.includes('Invalid role')) {
-        toast.error('Invalid role selected.');
-      } else if (msg.includes('permission') || msg.includes('not authorized')) {
-        toast.error('Permission denied — only administrators can add users.');
-      } else if (msg.includes('email') && msg.includes('confirmation')) {
-        // signUp succeeded but email confirmation required — still show success
-        toast.success(`${values.full_name} added. A confirmation email has been sent.`);
-        form.reset();
-        onSuccess();
-        handleClose();
-      } else {
-        toast.error(msg || 'Failed to create user. Please try again.');
-      }
+      toast.error(err.message || 'Failed to create user. Please try again.');
     }
   }
 
@@ -178,7 +89,6 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
     <Modal open={open} onClose={handleClose} title="Add New User" size="lg">
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
 
-        {/* Two-column: name + email */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Full Name"
@@ -195,7 +105,6 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
           />
         </div>
 
-        {/* Two-column: password + phone */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Temporary Password"
@@ -253,26 +162,21 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
         <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
           <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-blue-700 leading-relaxed">
-            The user will be created with the <strong>{roleInfo?.label}</strong> role.
-            They can sign in with their email and password immediately after being added.
-            They can update their password from the Settings page.
+            The user will be created as <strong>{roleInfo?.label}</strong> and can
+            sign in immediately with the email and password you set here.
           </p>
         </div>
 
-        {/* Action buttons */}
         <div className="flex gap-3 pt-1">
           <Button type="button" variant="outline" onClick={handleClose} className="flex-1">
             Cancel
           </Button>
-          <Button
-            type="submit"
-            isLoading={form.formState.isSubmitting}
-            className="flex-1"
-          >
+          <Button type="submit" isLoading={form.formState.isSubmitting} className="flex-1">
             <UserPlus className="h-4 w-4" />
             {form.formState.isSubmitting ? 'Creating…' : 'Add User'}
           </Button>
         </div>
+
       </form>
     </Modal>
   );
