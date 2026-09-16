@@ -15,7 +15,7 @@ const addUserSchema = z.object({
   password:  z.string().min(6, 'Password must be at least 6 characters'),
   full_name: z.string().min(1, 'Full name is required'),
   phone:     z.string().optional(),
-  role:      z.enum(['administrator', 'secretary', 'pastor', 'ministry_leader', 'member']),
+  role:      z.enum(['administrator', 'secretary', 'pastor', 'ministry_leader']),
 });
 
 type FormValues = z.infer<typeof addUserSchema>;
@@ -25,7 +25,6 @@ const ROLE_OPTIONS: { value: UserRole; label: string; desc: string }[] = [
   { value: 'secretary',      label: 'Secretary',        desc: 'Manage members, events & SMS' },
   { value: 'pastor',         label: 'Pastor',           desc: 'View reports & prayer requests' },
   { value: 'ministry_leader',label: 'Ministry Leader',  desc: 'Manage own ministry & reports' },
-  { value: 'member',         label: 'Member',           desc: 'Basic access only' },
 ];
 
 interface AddUserModalProps {
