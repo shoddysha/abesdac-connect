@@ -19,21 +19,28 @@ const FEATURES = [
   { icon: Shield,       label: 'Secure & Role-based', desc: 'Fine-grained access control' },
 ];
 
-// Deterministic particle positions so they don't shift on re-render
+// Church element particles — each has a type, position, size, speed and delay
 const PARTICLES = [
-  { left: '8%',  delay: '0s',    dur: '7s',  size: 3, opacity: 0.15 },
-  { left: '18%', delay: '1.2s',  dur: '9s',  size: 2, opacity: 0.10 },
-  { left: '27%', delay: '0.4s',  dur: '6s',  size: 4, opacity: 0.12 },
-  { left: '36%', delay: '2.1s',  dur: '8s',  size: 2, opacity: 0.08 },
-  { left: '45%', delay: '0.8s',  dur: '10s', size: 3, opacity: 0.13 },
-  { left: '55%', delay: '3s',    dur: '7s',  size: 2, opacity: 0.09 },
-  { left: '63%', delay: '1.6s',  dur: '9s',  size: 5, opacity: 0.07 },
-  { left: '72%', delay: '0.2s',  dur: '6s',  size: 3, opacity: 0.11 },
-  { left: '81%', delay: '2.5s',  dur: '8s',  size: 2, opacity: 0.10 },
-  { left: '91%', delay: '1s',    dur: '7s',  size: 4, opacity: 0.08 },
-  { left: '12%', delay: '3.5s',  dur: '9s',  size: 2, opacity: 0.12 },
-  { left: '50%', delay: '4s',    dur: '11s', size: 3, opacity: 0.06 },
+  { left: '6%',  delay: '0s',   dur: '9s',  size: 18, type: 'cross',   opacity: 0.18 },
+  { left: '14%', delay: '2s',   dur: '7s',  size: 22, type: 'bible',   opacity: 0.15 },
+  { left: '22%', delay: '0.5s', dur: '11s', size: 16, type: 'sda',     opacity: 0.13 },
+  { left: '31%', delay: '3.2s', dur: '8s',  size: 14, type: 'cross',   opacity: 0.16 },
+  { left: '40%', delay: '1s',   dur: '10s', size: 20, type: 'logo',    opacity: 0.12 },
+  { left: '49%', delay: '4s',   dur: '7s',  size: 15, type: 'bible',   opacity: 0.14 },
+  { left: '57%', delay: '0.8s', dur: '12s', size: 18, type: 'cross',   opacity: 0.11 },
+  { left: '65%', delay: '2.5s', dur: '9s',  size: 22, type: 'sda',     opacity: 0.13 },
+  { left: '74%', delay: '1.5s', dur: '8s',  size: 14, type: 'bible',   opacity: 0.15 },
+  { left: '82%', delay: '3.8s', dur: '10s', size: 16, type: 'logo',    opacity: 0.12 },
+  { left: '90%', delay: '0.3s', dur: '7s',  size: 20, type: 'cross',   opacity: 0.16 },
+  { left: '10%', delay: '5s',   dur: '11s', size: 12, type: 'sda',     opacity: 0.10 },
 ];
+
+const PARTICLE_SRC: Record<string, string> = {
+  cross: '/cross-icon.svg',
+  bible: '/bible-icon.svg',
+  sda:   '/public/sda-removebg-preview.png',
+  logo:  '/abeka.png',
+};
 
 export function Login() {
   const { session, signIn } = useAuth();
