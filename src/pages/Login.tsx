@@ -3,26 +3,19 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState } from 'react';
 import { Navigate, useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, AlertCircle, Loader2, Users, CalendarDays, BarChart3, Shield } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const schema = z.object({
-  email: z.string().email('Enter a valid email address'),
+  email:    z.string().email('Enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 type FormValues = z.infer<typeof schema>;
 
-const FEATURES = [
-  { icon: Users,        label: 'Member Management',  desc: 'Track every member & follow-up' },
-  { icon: CalendarDays, label: 'Events & Attendance', desc: 'Schedule & record services' },
-  { icon: BarChart3,    label: 'Reports & Analytics', desc: 'Real-time dashboards' },
-  { icon: Shield,       label: 'Secure & Role-based', desc: 'Fine-grained access control' },
-];
-
 export function Login() {
   const { session, signIn } = useAuth();
   const navigate = useNavigate();
-  const [showPass, setShowPass] = useState(false);
+  const [showPass, setShowPass]       = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } =
@@ -39,342 +32,528 @@ export function Login() {
 
   return (
     <>
-      {/* Spin keyframes injected once */}
       <style>{`
-        @keyframes spin3d {
-          0%   { transform: perspective(600px) rotateY(0deg); }
-          100% { transform: perspective(600px) rotateY(360deg); }
+        /* ── Page background ── */
+        .login-bg {
+          min-height: 100vh;
+          background: radial-gradient(ellipse at 60% 40%, #1a3a6e 0%, #0d1f3c 60%, #060e1c 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          position: relative;
+          padding: 24px 16px;
         }
-        .logo-spin {
-          animation: spin3d 6s linear infinite;
+
+        /* ── Ambient glow behind book ── */
+        .book-glow {
+          position: absolute;
+          width: 700px;
+          height: 500px;
+          background: radial-gradient(ellipse, rgba(37,99,235,0.25) 0%, transparent 70%);
+          border-radius: 50%;
+          pointer-events: none;
+          animation: glowPulse 4s ease-in-out infinite;
+        }
+        @keyframes glowPulse {
+          0%,100% { opacity: 0.7; transform: scale(1); }
+          50%      { opacity: 1;   transform: scale(1.05); }
+        }
+
+        /* ── Floating particles ── */
+        @keyframes floatUp {
+          0%   { transform: translateY(0) scale(1); opacity: 0; }
+          10%  { opacity: 1; }
+          90%  { opacity: 1; }
+          100% { transform: translateY(-100vh) scale(0.5); opacity: 0; }
+        }
+        .particle {
+          position: fixed;
+          bottom: -8px;
+          border-radius: 50%;
+          background: rgba(147,197,253,0.6);
+          animation: floatUp linear infinite;
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        /* ══════════════════════════════════
+           BOOK WRAPPER
+        ══════════════════════════════════ */
+        .book-scene {
+          perspective: 1800px;
+          position: relative;
+          z-index: 1;
+          width: min(820px, 96vw);
+          /* tall enough to hold the open book */
+        }
+
+        .book {
+          position: relative;
+          width: 100%;
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+          filter: drop-shadow(0 40px 80px rgba(0,0,0,0.7));
+        }
+
+        /* ── Spine (center strip) ── */
+        .book-spine {
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 28px;
+          height: 100%;
+          background: linear-gradient(to right, #1a2744, #2d3f6b, #1a2744);
+          z-index: 10;
+          border-radius: 2px;
+          box-shadow: 0 0 18px rgba(0,0,0,0.6);
+        }
+        /* vertical line texture on spine */
+        .book-spine::before {
+          content: '';
+          position: absolute;
+          top: 10%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 2px;
+          height: 80%;
+          background: rgba(255,255,255,0.08);
+          border-radius: 1px;
+        }
+
+        /* ══════════════════════════════════
+           LEFT COVER (opens outward)
+        ══════════════════════════════════ */
+        .book-left {
+          width: 50%;
+          transform-origin: right center;
           transform-style: preserve-3d;
+          animation: openLeft 1.6s cubic-bezier(.4,0,.2,1) 0.3s both;
+          position: relative;
+          z-index: 5;
         }
-        .logo-spin:hover {
-          animation-duration: 1.2s;
+        @keyframes openLeft {
+          0%   { transform: rotateY(0deg); }
+          100% { transform: rotateY(-28deg); }
+        }
+
+        .cover-front {
+          background: linear-gradient(135deg, #1e3a7a 0%, #1a2f5e 40%, #142348 100%);
+          border-radius: 6px 0 0 6px;
+          padding: 32px 28px;
+          min-height: 520px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 18px;
+          backface-visibility: hidden;
+          position: relative;
+          overflow: hidden;
+          border: 1px solid rgba(255,255,255,0.06);
+          border-right: none;
+        }
+
+        /* Worn leather texture lines */
+        .cover-front::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: repeating-linear-gradient(
+            92deg,
+            transparent,
+            transparent 3px,
+            rgba(0,0,0,0.04) 3px,
+            rgba(0,0,0,0.04) 4px
+          );
+          pointer-events: none;
+        }
+        /* Gold border inset */
+        .cover-front::after {
+          content: '';
+          position: absolute;
+          inset: 12px;
+          border: 1.5px solid rgba(212,175,55,0.25);
+          border-radius: 4px;
+          pointer-events: none;
+        }
+
+        .cover-logo {
+          width: 80px;
+          height: 80px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.1);
+          border: 2px solid rgba(212,175,55,0.4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 0 24px rgba(212,175,55,0.2);
+          animation: logoGlow 3s ease-in-out infinite;
+          z-index: 1;
+        }
+        @keyframes logoGlow {
+          0%,100% { box-shadow: 0 0 24px rgba(212,175,55,0.2); }
+          50%      { box-shadow: 0 0 40px rgba(212,175,55,0.45); }
+        }
+
+        .cover-title {
+          color: rgba(212,175,55,0.9);
+          font-size: 18px;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-align: center;
+          z-index: 1;
+          text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        }
+        .cover-subtitle {
+          color: rgba(255,255,255,0.4);
+          font-size: 10px;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          text-align: center;
+          z-index: 1;
+        }
+
+        /* Decorative corner ornaments */
+        .corner {
+          position: absolute;
+          width: 28px;
+          height: 28px;
+          border-color: rgba(212,175,55,0.3);
+          border-style: solid;
+          z-index: 1;
+        }
+        .corner-tl { top: 20px; left: 20px; border-width: 2px 0 0 2px; border-radius: 3px 0 0 0; }
+        .corner-tr { top: 20px; right: 20px; border-width: 2px 2px 0 0; border-radius: 0 3px 0 0; }
+        .corner-bl { bottom: 20px; left: 20px; border-width: 0 0 2px 2px; border-radius: 0 0 0 3px; }
+        .corner-br { bottom: 20px; right: 20px; border-width: 0 2px 2px 0; border-radius: 0 0 3px 0; }
+
+        /* ══════════════════════════════════
+           RIGHT PAGE (form lives here)
+        ══════════════════════════════════ */
+        .book-right {
+          width: 50%;
+          transform-origin: left center;
+          transform-style: preserve-3d;
+          animation: openRight 1.6s cubic-bezier(.4,0,.2,1) 0.3s both;
+          position: relative;
+          z-index: 5;
+        }
+        @keyframes openRight {
+          0%   { transform: rotateY(0deg); }
+          100% { transform: rotateY(28deg); }
+        }
+
+        .page-right {
+          background: linear-gradient(160deg, #fefdf8 0%, #faf8f0 50%, #f5f2e8 100%);
+          border-radius: 0 6px 6px 0;
+          min-height: 520px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 36px 32px;
+          backface-visibility: hidden;
+          position: relative;
+          overflow: hidden;
+          border: 1px solid rgba(0,0,0,0.08);
+          border-left: none;
+        }
+
+        /* Subtle lined paper effect */
+        .page-right::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: repeating-linear-gradient(
+            to bottom,
+            transparent,
+            transparent 27px,
+            rgba(37,99,235,0.05) 27px,
+            rgba(37,99,235,0.05) 28px
+          );
+          pointer-events: none;
+        }
+
+        /* Worn page edge shadow */
+        .page-right::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 18px;
+          height: 100%;
+          background: linear-gradient(to right, rgba(0,0,0,0.08), transparent);
+          pointer-events: none;
+        }
+
+        /* ── Form entrance ── */
+        @keyframes formRise {
+          from { opacity: 0; transform: translateY(24px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .form-content {
+          position: relative;
+          z-index: 1;
+          animation: formRise 0.7s ease both 1.6s;
+        }
+
+        /* ── Page bottom verse ── */
+        .page-verse {
+          position: absolute;
+          bottom: 16px;
+          left: 0; right: 0;
+          text-align: center;
+          font-size: 9px;
+          color: rgba(0,0,0,0.2);
+          font-style: italic;
+          letter-spacing: 0.05em;
+          z-index: 1;
+          padding: 0 24px;
+          animation: formRise 0.7s ease both 2s;
+        }
+
+        /* ── Input fields styled for parchment ── */
+        .parchment-input {
+          width: 100%;
+          box-sizing: border-box;
+          border: 1.5px solid rgba(37,99,235,0.2);
+          border-radius: 8px;
+          padding: 10px 14px;
+          font-size: 13px;
+          color: #1e293b;
+          background: rgba(255,255,255,0.7);
+          outline: none;
+          transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+          backdrop-filter: blur(2px);
+        }
+        .parchment-input:focus {
+          border-color: #2563eb;
+          background: rgba(255,255,255,0.95);
+          box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+
+        /* ── Sign in button ── */
+        .signin-btn {
+          width: 100%;
+          background: linear-gradient(135deg, #1d4ed8, #1e40af);
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 11px;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          box-shadow: 0 4px 14px rgba(29,78,216,0.4);
+          transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
+          letter-spacing: 0.02em;
+        }
+        .signin-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(29,78,216,0.5);
+          background: linear-gradient(135deg, #1e40af, #1d4ed8);
+        }
+        .signin-btn:active:not(:disabled) {
+          transform: translateY(0);
+          box-shadow: 0 2px 8px rgba(29,78,216,0.3);
+        }
+        .signin-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+
+        /* ── Responsive: stack on small screens ── */
+        @media (max-width: 640px) {
+          .book { flex-direction: column; align-items: center; }
+          .book-left  { width: 86%; transform-origin: bottom center; }
+          .book-right { width: 86%; }
+          .book-spine { display: none; }
+          .cover-front { min-height: 180px; border-radius: 10px 10px 0 0; border: 1px solid rgba(255,255,255,0.06); flex-direction: row; padding: 20px 24px; gap: 16px; justify-content: flex-start; }
+          .cover-front::after { inset: 8px; }
+          .corner { display: none; }
+          .cover-logo { width: 52px; height: 52px; flex-shrink: 0; }
+          .cover-title { font-size: 14px; text-align: left; }
+          .cover-subtitle { text-align: left; }
+          .page-right { border-radius: 0 0 10px 10px; min-height: auto; padding: 28px 24px 48px; border: 1px solid rgba(0,0,0,0.08); border-top: none; }
+          @keyframes openLeft  { 0%,100% { transform: rotateY(0deg); } }
+          @keyframes openRight { 0%,100% { transform: rotateY(0deg); } }
         }
       `}</style>
 
-      <div className="min-h-screen flex overflow-hidden">
+      {/* Page background */}
+      <div className="login-bg">
 
-        {/* ══════════════════════════════════════════════════════════
-            LEFT — Blue panel (65% wide)
-        ══════════════════════════════════════════════════════════ */}
-        <div
-          className="hidden lg:flex flex-col w-[65%] relative overflow-hidden"
-          style={{ background: 'linear-gradient(145deg, #1a3a6e 0%, #1e4d9b 40%, #1a3a6e 100%)' }}
-        >
-          {/* Background decorative circles (matches screenshot) */}
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: 520, height: 520,
-              right: -80, top: '15%',
-              background: 'rgba(255,255,255,0.05)',
-            }}
-          />
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: 320, height: 320,
-              right: 60, top: '30%',
-              background: 'rgba(255,255,255,0.06)',
-            }}
-          />
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: 200, height: 200,
-              left: '40%', bottom: '10%',
-              background: 'rgba(255,255,255,0.04)',
-            }}
-          />
+        {/* Ambient glow */}
+        <div className="book-glow" />
 
-          {/* Inner layout */}
-          <div className="relative z-10 flex flex-col h-full px-14 py-10">
+        {/* Floating particles */}
+        {[
+          ['12%','0s','8s',3],['23%','1.5s','6s',2],['34%','0.7s','9s',4],
+          ['46%','2.8s','7s',2],['57%','0.3s','10s',3],['68%','3.5s','6s',2],
+          ['79%','1.1s','8s',3],['89%','2.2s','7s',2],
+        ].map(([left, delay, dur, size], i) => (
+          <span key={i} className="particle" style={{
+            left: left as string,
+            animationDelay: delay as string,
+            animationDuration: dur as string,
+            width: size as number,
+            height: size as number,
+          }} />
+        ))}
 
-            {/* ── TOP: Logo + name ── */}
-            <div className="flex items-center gap-4">
-              {/* White circular background so blue logo is visible */}
-              <div
-                className="logo-spin flex-shrink-0 rounded-2xl overflow-hidden flex items-center justify-center"
-                style={{
-                  width: 56, height: 56,
-                  background: '#ffffff',
-                  boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
-                }}
-              >
-                <img
-                  src="/abeka.png"
-                  alt="Abeka SDA Church"
-                  style={{ width: 48, height: 48, objectFit: 'contain' }}
-                />
-              </div>
-              <div>
-                <p className="text-white font-bold text-lg leading-tight">ABESDAC_Connect</p>
-                <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>Church Management System</p>
-              </div>
-            </div>
+        {/* ── Book scene ── */}
+        <div className="book-scene">
+          <div className="book">
 
-            {/* ── MIDDLE: Hero copy ── */}
-            <div className="flex-1 flex flex-col justify-center" style={{ maxWidth: 460 }}>
+            {/* ── LEFT COVER ── */}
+            <div className="book-left">
+              <div className="cover-front">
+                <div className="corner corner-tl" />
+                <div className="corner corner-tr" />
+                <div className="corner corner-bl" />
+                <div className="corner corner-br" />
 
-              {/* Church location pill */}
-              <div
-                className="inline-flex items-center gap-2 self-start rounded-full mb-6"
-                style={{
-                  border: '1px solid rgba(74,222,128,0.35)',
-                  background: 'rgba(74,222,128,0.1)',
-                  padding: '6px 16px',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: '#86efac',
-                }}
-              >
-                <span
-                  className="rounded-full"
-                  style={{ width: 7, height: 7, background: '#4ade80', display: 'inline-block', flexShrink: 0,
-                    boxShadow: '0 0 6px #4ade80', animation: 'pulse 2s infinite' }}
-                />
-                Abeka SDA Church — Accra, Ghana
-              </div>
-
-              {/* Headline */}
-              <h1
-                className="font-extrabold text-white leading-tight tracking-tight"
-                style={{ fontSize: 46 }}
-              >
-                Manage your church<br />
-                <span style={{ color: '#93c5fd' }}>with confidence.</span>
-              </h1>
-
-              <p
-                className="mt-5 leading-relaxed"
-                style={{ color: 'rgba(255,255,255,0.55)', fontSize: 15, maxWidth: 400 }}
-              >
-                A complete administrative platform for tracking members, organizing
-                ministries, and streamlining church operations.
-              </p>
-
-              {/* Feature cards — 2×2 grid */}
-              <div className="grid grid-cols-2 gap-3 mt-10" style={{ maxWidth: 460 }}>
-                {FEATURES.map(({ icon: Icon, label, desc }) => (
-                  <div
-                    key={label}
-                    className="flex items-start gap-3 rounded-2xl"
-                    style={{
-                      background: 'rgba(255,255,255,0.07)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      padding: '14px 16px',
-                      backdropFilter: 'blur(4px)',
-                    }}
-                  >
-                    <div
-                      className="flex items-center justify-center rounded-xl flex-shrink-0"
-                      style={{ width: 34, height: 34, background: 'rgba(147,197,253,0.2)' }}
-                    >
-                      <Icon size={16} color="#93c5fd" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-white" style={{ fontSize: 12 }}>{label}</p>
-                      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 2, lineHeight: 1.4 }}>{desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* ── BOTTOM: Footer ── */}
-            <div
-              style={{
-                borderTop: '1px solid rgba(255,255,255,0.1)',
-                paddingTop: 20,
-                marginTop: 32,
-              }}
-            >
-              <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>
-                © {new Date().getFullYear()} ABESDAC_Connect — Abeka SDA Church. All rights reserved.
-              </p>
-              <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: 11, marginTop: 4 }}>
-                Designed &amp; developed by{' '}
-                <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>NextGen_Developer</span>
-              </p>
-            </div>
-
-          </div>
-        </div>
-
-        {/* ══════════════════════════════════════════════════════════
-            RIGHT — White form panel (35%)
-        ══════════════════════════════════════════════════════════ */}
-        <div
-          className="flex flex-1 flex-col"
-          style={{ background: '#f5f7fa' }}
-        >
-
-          {/* Mobile top bar */}
-          <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-200 lg:hidden">
-            <div className="h-9 w-9 rounded-xl bg-white shadow flex items-center justify-center overflow-hidden">
-              <img src="/abeka.png" alt="logo" className="h-8 w-8 object-contain" />
-            </div>
-            <p className="font-bold text-slate-900 text-sm">ABESDAC_Connect</p>
-          </div>
-
-          {/* Centered card */}
-          <div className="flex flex-1 items-center justify-center px-6 py-10">
-            <div
-              className="w-full rounded-3xl"
-              style={{
-                maxWidth: 400,
-                background: '#ffffff',
-                boxShadow: '0 8px 40px rgba(0,0,0,0.08)',
-                padding: '40px 36px',
-              }}
-            >
-              {/* Heading */}
-              <h2
-                className="font-extrabold tracking-tight"
-                style={{ fontSize: 26, color: '#0f172a' }}
-              >
-                Welcome back
-              </h2>
-              <p style={{ fontSize: 14, color: '#64748b', marginTop: 6 }}>
-                Sign in to{' '}
-                <span style={{ color: '#2563eb', fontWeight: 500 }}>your administrator account</span>
-              </p>
-
-              {/* Server error */}
-              {serverError && (
-                <div
-                  className="flex items-start gap-3 rounded-xl mt-5"
-                  style={{ background: '#fff5f5', border: '1px solid #fecdca', padding: '12px 14px', fontSize: 13, color: '#b91c1c' }}
-                >
-                  <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span>{serverError}</span>
+                <div className="cover-logo">
+                  <img src="/abeka.png" alt="Abeka SDA Church" style={{ width: 56, height: 56, objectFit: 'contain' }} />
                 </div>
-              )}
-
-              {/* Form */}
-              <form onSubmit={handleSubmit(onSubmit)} style={{ marginTop: 28 }}>
-
-                {/* Email */}
-                <div style={{ marginBottom: 18 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                    Email address
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="admin@abekasda.org"
-                    autoComplete="email"
-                    {...register('email')}
-                    style={{
-                      width: '100%', boxSizing: 'border-box',
-                      border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '11px 14px',
-                      fontSize: 14, color: '#111827', background: '#f9fafb',
-                      outline: 'none', transition: 'border-color 0.2s',
-                    }}
-                    onFocus={e => (e.target.style.borderColor = '#2563eb')}
-                    onBlur={e => (e.target.style.borderColor = '#e5e7eb')}
-                  />
-                  {errors.email && (
-                    <p style={{ marginTop: 5, fontSize: 12, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <AlertCircle size={11} />{errors.email.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Password */}
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                    Password
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type={showPass ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      autoComplete="current-password"
-                      {...register('password')}
-                      style={{
-                        width: '100%', boxSizing: 'border-box',
-                        border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '11px 42px 11px 14px',
-                        fontSize: 14, color: '#111827', background: '#f9fafb',
-                        outline: 'none', transition: 'border-color 0.2s',
-                      }}
-                      onFocus={e => (e.target.style.borderColor = '#2563eb')}
-                      onBlur={e => (e.target.style.borderColor = '#e5e7eb')}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPass(v => !v)}
-                      style={{
-                        position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                        background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: 0,
-                      }}
-                    >
-                      {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                  {errors.password && (
-                    <p style={{ marginTop: 5, fontSize: 12, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <AlertCircle size={11} />{errors.password.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Forgot password */}
-                <div style={{ textAlign: 'right', marginBottom: 22 }}>
-                  <Link
-                    to="/forgot-password"
-                    style={{ fontSize: 13, color: '#2563eb', fontWeight: 500 }}
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-
-                {/* Submit button */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  style={{
-                    width: '100%',
-                    background: isSubmitting ? '#93c5fd' : '#1d4ed8',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 10,
-                    padding: '13px',
-                    fontSize: 15,
-                    fontWeight: 700,
-                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    boxShadow: '0 4px 16px rgba(29,78,216,0.35)',
-                    transition: 'background 0.2s, box-shadow 0.2s',
-                  }}
-                  onMouseEnter={e => { if (!isSubmitting) (e.currentTarget.style.background = '#1e40af'); }}
-                  onMouseLeave={e => { if (!isSubmitting) (e.currentTarget.style.background = '#1d4ed8'); }}
-                >
-                  {isSubmitting ? (
-                    <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Signing in…</>
-                  ) : 'Sign In'}
-                </button>
-              </form>
-
-              {/* Need access */}
-              <div style={{ marginTop: 28, textAlign: 'center' }}>
-                <p style={{ fontSize: 13, color: '#9ca3af' }}>
-                  Need access?{' '}
-                  <span style={{ color: '#2563eb', fontWeight: 600, cursor: 'pointer' }}>
-                    Contact the church administrator
-                  </span>
+                <p className="cover-title">ABESDAC<br />Connect</p>
+                <p className="cover-subtitle">Church Management System</p>
+                <p style={{ color: 'rgba(212,175,55,0.5)', fontSize: 9, letterSpacing: '0.15em', textAlign: 'center', zIndex: 1, marginTop: 8 }}>
+                  ABEKA SEVENTH-DAY<br />ADVENTIST CHURCH
                 </p>
               </div>
             </div>
-          </div>
 
-          {/* Right panel footer (desktop) */}
-          <div className="hidden lg:block px-8 pb-6 text-center">
-            <p style={{ fontSize: 11, color: '#94a3b8' }}>
-              © {new Date().getFullYear()} ABESDAC_Connect · Built by NextGen_Developer
-            </p>
-          </div>
+            {/* ── SPINE ── */}
+            <div className="book-spine" />
+
+            {/* ── RIGHT PAGE (login form) ── */}
+            <div className="book-right">
+              <div className="page-right">
+
+                <div className="form-content">
+                  {/* Header */}
+                  <div style={{ marginBottom: 22 }}>
+                    <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>
+                      Welcome back
+                    </h2>
+                    <p style={{ fontSize: 12, color: '#64748b' }}>
+                      Sign in to your{' '}
+                      <span style={{ color: '#2563eb', fontWeight: 600 }}>administrator account</span>
+                    </p>
+                  </div>
+
+                  {/* Server error */}
+                  {serverError && (
+                    <div style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 8,
+                      background: '#fff5f5', border: '1px solid #fecdca',
+                      borderRadius: 8, padding: '10px 12px',
+                      fontSize: 12, color: '#b91c1c', marginBottom: 16,
+                    }}>
+                      <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span>{serverError}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSubmit(onSubmit)}>
+                    {/* Email */}
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>
+                        Email address
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="admin@abekasda.org"
+                        autoComplete="email"
+                        className="parchment-input"
+                        {...register('email')}
+                      />
+                      {errors.email && (
+                        <p style={{ marginTop: 4, fontSize: 11, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <AlertCircle size={10} />{errors.email.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Password */}
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>
+                        Password
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={showPass ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          autoComplete="current-password"
+                          className="parchment-input"
+                          style={{ paddingRight: 40 }}
+                          {...register('password')}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPass(v => !v)}
+                          style={{
+                            position: 'absolute', right: 12, top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            color: '#94a3b8', padding: 0,
+                          }}
+                        >
+                          {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                      {errors.password && (
+                        <p style={{ marginTop: 4, fontSize: 11, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <AlertCircle size={10} />{errors.password.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Forgot */}
+                    <div style={{ textAlign: 'right', marginBottom: 18 }}>
+                      <Link to="/forgot-password" style={{ fontSize: 11, color: '#2563eb', fontWeight: 500 }}>
+                        Forgot password?
+                      </Link>
+                    </div>
+
+                    {/* Submit */}
+                    <button type="submit" disabled={isSubmitting} className="signin-btn">
+                      {isSubmitting
+                        ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Signing in…</>
+                        : 'Sign In'
+                      }
+                    </button>
+                  </form>
+
+                  {/* Need access */}
+                  <p style={{ marginTop: 18, textAlign: 'center', fontSize: 11, color: '#94a3b8' }}>
+                    Need access?{' '}
+                    <span style={{ color: '#2563eb', fontWeight: 600, cursor: 'pointer' }}>
+                      Contact the administrator
+                    </span>
+                  </p>
+                </div>
+
+                {/* Scripture verse at bottom of page */}
+                <p className="page-verse">
+                  "I can do all things through Christ who strengthens me." — Philippians 4:13
+                </p>
+              </div>
+            </div>
+
+          </div>{/* /book */}
+
+          {/* Caption below book */}
+          <p style={{
+            textAlign: 'center', marginTop: 20,
+            fontSize: 11, color: 'rgba(255,255,255,0.25)',
+            letterSpacing: '0.05em',
+            animation: 'formRise 0.6s ease both 2.2s',
+          }}>
+            © {new Date().getFullYear()} ABESDAC_Connect · Abeka SDA Church · Built by NextGen_Developer
+          </p>
         </div>
 
       </div>
