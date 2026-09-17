@@ -38,7 +38,7 @@ const PARTICLES = [
 const PARTICLE_SRC: Record<string, string> = {
   cross: '/cross-icon.svg',
   bible: '/bible-icon.svg',
-  sda:   '/public/sda-removebg-preview.png',
+  sda:   '/sda-removebg-preview.png',
   logo:  '/abeka.png',
 };
 
@@ -71,20 +71,19 @@ export function Login() {
         .logo-spin { animation: spin3d 6s linear infinite; transform-style: preserve-3d; }
         .logo-spin:hover { animation-duration: 1.2s; }
 
-        /* ── Floating particles ── */
+        /* ── Floating church element particles ── */
         @keyframes floatUp {
-          0%   { transform: translateY(0) scale(1);   opacity: 0; }
+          0%   { transform: translateY(0) scale(1) rotate(0deg);   opacity: 0; }
           10%  { opacity: 1; }
           90%  { opacity: 1; }
-          100% { transform: translateY(-100vh) scale(0.6); opacity: 0; }
+          100% { transform: translateY(-105vh) scale(0.7) rotate(20deg); opacity: 0; }
         }
         .particle {
           position: absolute;
-          bottom: -10px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.9);
+          bottom: -30px;
           animation: floatUp linear infinite;
           pointer-events: none;
+          filter: brightness(0) invert(1);  /* makes all images white */
         }
 
         /* ── Decorative circle pulse ── */
@@ -150,10 +149,13 @@ export function Login() {
           className="hidden lg:flex flex-col w-[65%] relative overflow-hidden enter-left"
           style={{ background: 'linear-gradient(145deg, #1a3a6e 0%, #1e4d9b 40%, #1a3a6e 100%)' }}
         >
-          {/* Floating particles */}
+          {/* Floating church element particles */}
           {PARTICLES.map((p, i) => (
-            <span
+            <img
               key={i}
+              src={PARTICLE_SRC[p.type]}
+              alt=""
+              aria-hidden="true"
               className="particle"
               style={{
                 left: p.left,
