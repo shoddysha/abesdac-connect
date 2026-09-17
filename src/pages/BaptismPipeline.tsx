@@ -5,11 +5,10 @@ import { supabase } from '@/lib/supabase';
 import { format, differenceInDays } from 'date-fns';
 import {
   BookOpen, CheckCircle2, Clock, Search,
-  UserCheck, Users, Download, CalendarDays,
+  UserCheck, Users, Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Spinner, EmptyState } from '@/components/ui/EmptyState';
-import { Badge } from '@/components/ui/Badge';
 import { exportToCSV } from '@/utils/export';
 import { logAudit } from '@/services/audit';
 import type { Member } from '@/types/database';
@@ -74,10 +73,7 @@ export function BaptismPipeline() {
     recent:     members.filter(m => m.baptism_date && new Date(m.baptism_date) >= oneYearAgo).length,
   }), [members, oneYearAgo]);
 
-  async function handleExport() {
-    exportToCSV('baptism-pipeline', exportRows());
-    await logAudit('export', 'baptism_pipeline', `Baptism pipeline exported (${filtered.length} members, filter: ${stage})`);
-  }
+  function exportRows() {
     return filtered.map(m => ({
       'Member ID':     m.member_code,
       'First Name':    m.first_name,
@@ -87,6 +83,11 @@ export function BaptismPipeline() {
       'Ministry':      (m as any).ministries?.name ?? '—',
       'Phone':         m.phone ?? '—',
     }));
+  }
+
+  async function handleExport() {
+    exportToCSV('baptism-pipeline', exportRows());
+    await logAudit('export', 'baptism_pipeline', `Baptism pipeline exported (${filtered.length} members, filter: ${stage})`);
   }
 
   return (
