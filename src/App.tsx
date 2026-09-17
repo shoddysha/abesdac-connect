@@ -36,6 +36,8 @@ import { NotificationSettings } from '@/pages/NotificationSettings';
 import { NotificationHistory } from '@/pages/NotificationHistory';
 import { Resources } from '@/pages/Resources';
 import { HelpSupport } from '@/pages/HelpSupport';
+import { PastorDashboard } from '@/pages/PastorDashboard';
+import { BaptismPipeline } from '@/pages/BaptismPipeline';
 
 export function App() {
   return (
@@ -124,7 +126,7 @@ export function App() {
               }
             />
             <Route path="/member-followup" element={
-                <ProtectedRoute roles={['ministry_leader', 'administrator', 'secretary']}>
+                <ProtectedRoute roles={['ministry_leader', 'administrator', 'secretary', 'pastor']}>
                   <MemberFollowUp />
                 </ProtectedRoute>
               }
@@ -203,6 +205,18 @@ export function App() {
             />
             <Route path="/settings" element={<Settings />} />
             <Route path="/help-support" element={<HelpSupport />} />
+            <Route path="/pastor-dashboard" element={
+                <ProtectedRoute roles={['pastor']}>
+                  <PastorDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/baptism-pipeline" element={
+                <ProtectedRoute roles={['pastor', 'administrator', 'secretary']}>
+                  <BaptismPipeline />
+                </ProtectedRoute>
+              }
+            />
           </Route>
 
           <Route path="*" element={<NotFound />} />

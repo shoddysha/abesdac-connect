@@ -21,23 +21,15 @@ const FEATURES = [
 
 // Church element particles — each has a type, position, size, speed and delay
 const PARTICLES = [
-  { left: '6%',  delay: '0s',   dur: '9s',  size: 18, type: 'cross',   opacity: 0.18 },
-  { left: '14%', delay: '2s',   dur: '7s',  size: 22, type: 'bible',   opacity: 0.15 },
-  { left: '22%', delay: '0.5s', dur: '11s', size: 16, type: 'sda',     opacity: 0.13 },
-  { left: '31%', delay: '3.2s', dur: '8s',  size: 14, type: 'cross',   opacity: 0.16 },
-  { left: '40%', delay: '1s',   dur: '10s', size: 20, type: 'logo',    opacity: 0.12 },
-  { left: '49%', delay: '4s',   dur: '7s',  size: 15, type: 'bible',   opacity: 0.14 },
-  { left: '57%', delay: '0.8s', dur: '12s', size: 18, type: 'cross',   opacity: 0.11 },
-  { left: '65%', delay: '2.5s', dur: '9s',  size: 22, type: 'sda',     opacity: 0.13 },
-  { left: '74%', delay: '1.5s', dur: '8s',  size: 14, type: 'bible',   opacity: 0.15 },
-  { left: '82%', delay: '3.8s', dur: '10s', size: 16, type: 'logo',    opacity: 0.12 },
-  { left: '90%', delay: '0.3s', dur: '7s',  size: 20, type: 'cross',   opacity: 0.16 },
-  { left: '10%', delay: '5s',   dur: '11s', size: 12, type: 'sda',     opacity: 0.10 },
+  { left: '8%',  delay: '0s',   dur: '20s', size: 24, type: 'cross', opacity: 0.10 },
+  { left: '28%', delay: '5s',   dur: '25s', size: 28, type: 'sda',   opacity: 0.09 },
+  { left: '50%', delay: '10s',  dur: '22s', size: 22, type: 'logo',  opacity: 0.10 },
+  { left: '72%', delay: '2s',   dur: '28s', size: 26, type: 'cross', opacity: 0.08 },
+  { left: '88%', delay: '14s',  dur: '24s', size: 24, type: 'sda',   opacity: 0.09 },
 ];
 
 const PARTICLE_SRC: Record<string, string> = {
   cross: '/cross-icon.svg',
-  bible: '/bible-icon.svg',
   sda:   '/sda-removebg-preview.png',
   logo:  '/abeka.png',
 };
@@ -83,7 +75,6 @@ export function Login() {
           bottom: -30px;
           animation: floatUp linear infinite;
           pointer-events: none;
-          filter: brightness(0) invert(1);  /* makes all images white */
         }
 
         /* ── Decorative circle pulse ── */

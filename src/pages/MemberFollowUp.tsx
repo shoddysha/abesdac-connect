@@ -26,6 +26,7 @@ import { format } from 'date-fns';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { logAudit } from '@/services/audit';
 
 const followUpSchema = z.object({
   member_id: z.string().min(1, 'Member is required'),
@@ -62,27 +63,39 @@ export function MemberFollowUp() {
   });
 
   const userMinistry = ministriesQuery.data?.find((m: any) => m.leader_id === profile?.id);
+  const isPastor = profile?.role === 'pastor';
 
-  // Fetch follow-ups for this ministry with real-time updates
+  // Fetch follow-ups — pastor sees all church-wide; ministry leader sees their ministry only
   const followUpsQuery = useQuery({
-    queryKey: ['member-followups', userMinistry?.id],
+    queryKey: ['member-followups', isPastor ? 'all' : userMinistry?.id],
     queryFn: async () => {
-      if (!userMinistry) return [];
-      const { data, error } = await supabase
+      if (!isPastor && !userMinistry) return [];
+      let query = supabase
         .from('member_followups')
         .select('*, members(first_name, last_name, member_code, phone, email)')
-        .eq('ministry_id', userMinistry.id)
         .order('follow_up_date', { ascending: true });
+      if (!isPastor) query = query.eq('ministry_id', userMinistry!.id);
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
-    enabled: !!userMinistry,
+    enabled: isPastor || !!userMinistry,
   });
 
-  // Fetch members in this ministry
+  // Fetch members — pastor sees all active members; ministry leader sees their ministry
   const membersQuery = useQuery({
-    queryKey: ['ministry-members', userMinistry?.id],
+    queryKey: ['members-for-followup', isPastor ? 'all' : userMinistry?.id],
     queryFn: async () => {
+      if (isPastor) {
+        const { data, error } = await supabase
+          .from('members')
+          .select('id, first_name, last_name, member_code')
+          .eq('status', 'active')
+          .eq('is_archived', false)
+          .order('last_name');
+        if (error) throw error;
+        return data || [];
+      }
       if (!userMinistry) return [];
       const { data, error } = await supabase
         .from('ministry_members')
@@ -93,7 +106,7 @@ export function MemberFollowUp() {
         .map((row: any) => row.members)
         .filter((m: any) => m && m.status === 'active');
     },
-    enabled: !!userMinistry,
+    enabled: isPastor || !!userMinistry,
   });
 
   const {
@@ -110,7 +123,7 @@ export function MemberFollowUp() {
   });
 
   // Real-time subscription
-  useRealtimeQuery('member_followups', ['member-followups', userMinistry?.id]);
+  useRealtimeQuery('member_followups', ['member-followups', isPastor ? 'all' : userMinistry?.id]);
 
   const followUps = followUpsQuery.data ?? [];
   const filteredFollowUps = followUps
@@ -130,15 +143,21 @@ export function MemberFollowUp() {
 
   async function onSubmit(values: FollowUpFormValues) {
     try {
-      const { error } = await supabase.from('member_followups').insert([
+      const { data: inserted, error } = await supabase.from('member_followups').insert([
         {
           ...values,
-          ministry_id: userMinistry!.id,
+          ministry_id: userMinistry?.id ?? null,
           created_by: profile?.id,
           created_at: new Date().toISOString(),
         },
-      ]);
+      ]).select('id').single();
       if (error) throw error;
+      await logAudit(
+        'create',
+        'member_followups',
+        `Follow-up added for member (type: ${values.follow_up_type}, priority: ${values.priority})`,
+        inserted?.id
+      );
       toast.success('Follow-up added');
       setFormOpen(false);
       reset({
@@ -158,6 +177,12 @@ export function MemberFollowUp() {
         .update({ completed_at: currentState ? null : new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
+      await logAudit(
+        'update',
+        'member_followups',
+        currentState ? 'Follow-up marked as pending' : 'Follow-up marked as complete',
+        id
+      );
       toast.success(currentState ? 'Marked as pending' : 'Marked as complete');
       queryClient.invalidateQueries({ queryKey: ['member-followups'] });
     } catch (err) {
@@ -170,6 +195,7 @@ export function MemberFollowUp() {
     try {
       const { error } = await supabase.from('member_followups').delete().eq('id', id);
       if (error) throw error;
+      await logAudit('delete', 'member_followups', 'Follow-up deleted', id);
       toast.success('Follow-up deleted');
       queryClient.invalidateQueries({ queryKey: ['member-followups'] });
     } catch (err) {
@@ -177,7 +203,7 @@ export function MemberFollowUp() {
     }
   }
 
-  if (!userMinistry) {
+  if (!isPastor && !userMinistry) {
     return (
       <div className="space-y-5">
         <h1 className="text-2xl font-bold text-ink">Member Follow-up</h1>

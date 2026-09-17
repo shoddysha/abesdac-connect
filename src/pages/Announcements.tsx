@@ -48,7 +48,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 export function Announcements() {
   const [searchParams] = useSearchParams();
   const { hasRole, profile } = useAuth();
-  const canCreate = hasRole('administrator', 'secretary', 'ministry_leader');
+  const canCreate = hasRole('administrator', 'secretary', 'ministry_leader', 'pastor');
   const canManage = hasRole('administrator', 'secretary');
   const queryClient = useQueryClient();
 
@@ -98,7 +98,8 @@ export function Announcements() {
   const publishedCount = counts.published;
 
   function canManageAnnouncement(a: Announcement) {
-    return canManage || (profile?.role === 'ministry_leader' && a.created_by === profile.id);
+    return canManage || 
+      ((profile?.role === 'ministry_leader' || profile?.role === 'pastor') && a.created_by === profile.id);
   }
 
   function openCreate() {

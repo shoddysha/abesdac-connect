@@ -17,10 +17,11 @@ export function useNotificationCounts() {
   const { profile, hasRole } = useAuth();
   const isAdminOrSecretary = hasRole('administrator', 'secretary');
   const isMinistryLeader = hasRole('ministry_leader');
+  const isPastor = hasRole('pastor');
 
   const query = useQuery({
     queryKey: ['notification-counts', profile?.id || 'unauthenticated'],
-    refetchInterval: 10000, // Poll every 10 seconds for new notifications
+    refetchInterval: 10000,
     queryFn: async (): Promise<NotificationCounts> => {
       // Count UNVIEWED announcements (available to all roles)
       const announcements = await getUnviewedAnnouncementCount();
@@ -28,7 +29,6 @@ export function useNotificationCounts() {
       // Ministry Leader specific counts (deadlines)
       let deadlines = 0;
       if (isMinistryLeader && profile?.id) {
-        // Get ministries where user is a leader
         const { data: ministryData } = await supabase
           .from('ministries')
           .select('id')
@@ -40,7 +40,6 @@ export function useNotificationCounts() {
           const now = new Date();
           const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-          // Count upcoming deadlines (next 7 days)
           const { count: upcomingCount } = await supabase
             .from('report_deadlines')
             .select('*', { count: 'exact', head: true })
@@ -49,7 +48,6 @@ export function useNotificationCounts() {
             .gte('deadline_date', now.toISOString())
             .lte('deadline_date', sevenDaysLater.toISOString());
 
-          // Count overdue deadlines
           const { count: overdueCount } = await supabase
             .from('report_deadlines')
             .select('*', { count: 'exact', head: true })
@@ -61,15 +59,29 @@ export function useNotificationCounts() {
         }
       }
 
-      // Admin/Secretary specific counts
+      // Pastor: count their pending follow-ups church-wide
+      let pastorFollowUps = 0;
+      if (isPastor) {
+        try {
+          const { count } = await supabase
+            .from('member_followups')
+            .select('*', { count: 'exact', head: true })
+            .is('completed_at', null);
+          pastorFollowUps = count || 0;
+        } catch {
+          pastorFollowUps = 0;
+        }
+      }
+
+      // Non-admin/secretary early return
       if (!isAdminOrSecretary) {
-        return { 
-          ministryReports: 0, 
-          memberFollowUps: 0, 
-          budgets: 0, 
-          announcements, 
+        return {
+          ministryReports: 0,
+          memberFollowUps: pastorFollowUps,
+          budgets: 0,
+          announcements,
           deadlines,
-          total: announcements + deadlines 
+          total: announcements + deadlines + pastorFollowUps,
         };
       }
 

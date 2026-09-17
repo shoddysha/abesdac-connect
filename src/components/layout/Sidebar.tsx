@@ -21,6 +21,8 @@ import {
   Video,
   ChevronLeft,
   ChevronRight,
+  BookOpen,
+  Church,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotificationCounts } from '@/hooks/useNotificationCounts';
@@ -36,6 +38,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/pastor-dashboard', label: 'Pastoral Overview', icon: Church, roles: ['pastor'] },
   { to: '/ministry-dashboard', label: 'My Ministry', icon: Briefcase, roles: ['ministry_leader'] },
   { to: '/members', label: 'Members', icon: Users },
   { to: '/ministries', label: 'Ministries', icon: HeartHandshake },
@@ -46,11 +49,12 @@ const navItems: NavItem[] = [
   { to: '/visitors', label: 'Visitors', icon: UserPlus2, roles: ['administrator', 'secretary', 'ministry_leader'] },
   { to: '/prayer-requests', label: 'Prayer Requests', icon: HandHeart, roles: ['administrator', 'pastor', 'secretary'] },
   { to: '/leaders', label: 'Leaders', icon: UsersRound, roles: ['administrator', 'pastor', 'ministry_leader', 'secretary'] },
-  { to: '/member-followup', label: 'Member Follow-up', icon: Heart, roles: ['ministry_leader'] },
+  { to: '/baptism-pipeline', label: 'Baptism Pipeline', icon: BookOpen, roles: ['pastor', 'administrator', 'secretary'] },
+  { to: '/member-followup', label: 'Member Follow-up', icon: Heart, roles: ['ministry_leader', 'pastor'] },
   { to: '/submit-ministry-report', label: 'Submit Reports', icon: FileBarChart, roles: ['ministry_leader'] },
   { to: '/all-member-followups', label: 'Member Follow-ups', icon: Heart, roles: ['administrator', 'secretary'] },
   { to: '/all-ministry-reports', label: 'Ministry Reports', icon: FileBarChart, roles: ['administrator', 'secretary'] },
-  { to: '/resources', label: 'Resources', icon: Video, roles: ['administrator', 'secretary', 'ministry_leader'] },
+  { to: '/resources', label: 'Resources', icon: Video, roles: ['administrator', 'secretary', 'ministry_leader', 'pastor'] },
   { to: '/sms', label: 'SMS & Notifications', icon: MessageSquare, roles: ['administrator', 'secretary'] },
   { to: '/users', label: 'User Management', icon: UserCog, roles: ['administrator'] },
   { to: '/audit-logs', label: 'Audit Logs', icon: Shield, roles: ['administrator', 'secretary'] },
@@ -69,6 +73,8 @@ export function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNav
       case '/all-ministry-reports':
         return notificationCounts.ministryReports;
       case '/all-member-followups':
+        return notificationCounts.memberFollowUps;
+      case '/member-followup':
         return notificationCounts.memberFollowUps;
       case '/announcements':
         return notificationCounts.announcements;
